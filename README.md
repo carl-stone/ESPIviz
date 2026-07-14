@@ -5,6 +5,8 @@ It provides final-clustering UMAP exploration, gene and gene-set expression
 summaries, the complete primary condition-model differential-expression result,
 and a short set of manuscript-aligned pathways.
 
+**[Open ESPIviz](https://019f6264-f0b5-e432-795c-c2f7e9fd5c95.share.connect.posit.cloud/)**
+
 **ESPIviz — analysis and application by Carl Stone.**
 
 The interface reports values directly and does not calculate differential
