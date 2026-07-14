@@ -1,0 +1,480 @@
+:root {
+  --ink: #17232b;
+  --ink-soft: #526b7b;
+  --paper: #f5f2ec;
+  --paper-deep: #ece6dc;
+  --card: #fffefb;
+  --rule: #d8d3c9;
+  --accent: #9d2857;
+  --accent-dark: #751b40;
+  --blue: #48677c;
+}
+
+html,
+body {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+body {
+  letter-spacing: 0.005em;
+}
+
+h1,
+h2,
+h3,
+.card-header,
+.brand-name {
+  letter-spacing: -0.015em;
+}
+
+.navbar {
+  border-bottom: 3px solid var(--accent);
+  box-shadow: none;
+  min-height: 64px;
+}
+
+.navbar .container-fluid {
+  max-width: 1640px;
+}
+
+.navbar-nav .nav-link {
+  font-size: 0.9rem;
+  font-weight: 650;
+  letter-spacing: 0.025em;
+}
+
+.brand-lockup {
+  align-items: baseline;
+  display: flex;
+  gap: 0.65rem;
+  margin-right: 1.2rem;
+}
+
+.brand-name {
+  color: #fff;
+  font-family: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  font-size: 1.55rem;
+  font-weight: 700;
+}
+
+.brand-subtitle {
+  color: #c9d2d7;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.bslib-sidebar-layout > .sidebar {
+  background: #ebe5dc;
+  border-right: 1px solid var(--rule);
+}
+
+.bslib-sidebar-layout > .main {
+  padding: 1.05rem;
+}
+
+.sidebar-title {
+  font-family: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  font-size: 1.3rem;
+}
+
+.sidebar-section-title,
+.card-section-title {
+  font-family: inherit;
+  font-size: 0.73rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  margin: 0 0 0.8rem;
+  text-transform: uppercase;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: 0.35rem;
+  box-shadow: 0 2px 12px rgba(23, 35, 43, 0.045);
+}
+
+.card-header {
+  background: transparent;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink);
+  font-family: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.card-kicker {
+  color: var(--ink-soft);
+  font-family: "Source Sans 3", sans-serif;
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.11em;
+  margin-right: 0.75rem;
+  text-transform: uppercase;
+}
+
+.figure-subtitle {
+  color: var(--ink);
+}
+
+.selection-card .card-body {
+  display: block;
+}
+
+.selection-overview {
+  margin: 0.5rem 0 0.75rem;
+}
+
+.selection-count {
+  align-items: baseline;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.selection-count strong {
+  color: var(--accent);
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: clamp(2rem, 3vw, 3.25rem);
+  line-height: 1;
+}
+
+.selection-count span,
+.selection-detail,
+.selection-instruction,
+.supporting-copy {
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+}
+
+.selection-detail {
+  margin-top: 0.45rem;
+}
+
+.selection-instruction {
+  border-left: 2px solid var(--rule);
+  line-height: 1.45;
+  padding-left: 0.75rem;
+}
+
+.selection-card .btn-sm,
+.download-stack .btn-sm {
+  margin: 0 0.25rem 0.45rem 0;
+}
+
+.btn {
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
+}
+
+.btn-outline-primary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-outline-primary:hover,
+.btn-outline-primary:focus {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid #d16a98 !important;
+  outline-offset: 2px;
+}
+
+.gene-set-status,
+.input-status {
+  font-size: 0.78rem;
+  margin: 0.45rem 0 0.75rem;
+}
+
+.gene-set-status {
+  color: var(--ink-soft);
+}
+
+.input-status {
+  color: #8b2b2b;
+}
+
+.result-toolbar {
+  align-items: flex-end;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 0.8rem;
+}
+
+.result-toolbar .form-group {
+  margin-bottom: 0;
+}
+
+.result-title {
+  font-size: 1.08rem;
+  margin: 0;
+}
+
+.span-12 {
+  grid-column: 1 / -1;
+}
+
+.nav-tabs .nav-link {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.nav-tabs .nav-link.active {
+  color: var(--accent);
+}
+
+.page-shell,
+.about-shell {
+  margin: 0 auto;
+  max-width: 1540px;
+  padding: 1.5rem;
+  width: 100%;
+}
+
+.page-heading {
+  align-items: end;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  gap: 2rem;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.2rem;
+}
+
+.page-heading h1,
+.about-hero h1 {
+  color: var(--ink);
+  font-size: clamp(2.1rem, 4vw, 4rem);
+  line-height: 1.04;
+  margin: 0.1rem 0 0.7rem;
+  max-width: 1100px;
+}
+
+.eyebrow {
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.lede {
+  color: var(--ink-soft);
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.12rem;
+  line-height: 1.5;
+  margin: 0;
+  max-width: 780px;
+}
+
+.current-gene-display {
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 1rem;
+  padding: 0.4rem 0 1rem;
+}
+
+.current-gene-display strong,
+.current-gene-display span {
+  display: block;
+}
+
+.current-gene-display strong {
+  color: var(--accent);
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 2.4rem;
+}
+
+.current-gene-display span {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+.pathway-detail h2 {
+  font-size: 1.65rem;
+  line-height: 1.12;
+  margin: 0.8rem 0;
+}
+
+.pathway-description {
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.pathway-detail dl {
+  display: grid;
+  font-size: 0.85rem;
+  grid-template-columns: auto 1fr;
+  margin: 1rem 0;
+}
+
+.pathway-detail dt,
+.pathway-detail dd {
+  border-top: 1px solid var(--rule);
+  margin: 0;
+  padding: 0.55rem 0;
+}
+
+.pathway-detail dd {
+  text-align: right;
+}
+
+.about-hero {
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 1.5rem;
+  padding: 1.5rem 0 2rem;
+}
+
+.about-hero h1 {
+  font-size: clamp(2.15rem, 4.4vw, 4.6rem);
+}
+
+.credit-line {
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 700;
+  margin: 1.4rem 0 0;
+}
+
+.methods-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.methods-grid h2 {
+  color: var(--accent);
+  font-family: "Source Sans 3", sans-serif;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.methods-grid p {
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.data-link-list {
+  line-height: 1.8;
+  padding-left: 1.2rem;
+}
+
+.data-link-list a {
+  color: var(--accent);
+}
+
+.maintenance-shell {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 1.5rem;
+}
+
+.maintenance-card {
+  background: var(--card);
+  border-left: 4px solid var(--accent);
+  box-shadow: 0 10px 38px rgba(23, 35, 43, 0.09);
+  max-width: 620px;
+  padding: 3rem;
+}
+
+.maintenance-card h1 {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+}
+
+.dataTables_wrapper {
+  font-size: 0.8rem;
+}
+
+table.dataTable thead th {
+  color: var(--ink);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+  .brand-subtitle {
+    display: none;
+  }
+
+  .page-shell,
+  .about-shell {
+    padding: 0.85rem;
+  }
+
+  .page-heading {
+    align-items: start;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .methods-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .main-figure-card .plotly {
+    height: 500px !important;
+    min-height: 480px;
+  }
+}
+
+@media (max-width: 520px) {
+  .navbar {
+    min-height: 56px;
+  }
+
+  .page-heading h1,
+  .about-hero h1 {
+    font-size: 2.15rem;
+  }
+
+  .lede {
+    font-size: 1rem;
+  }
+
+  .methods-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .maintenance-card {
+    padding: 2rem 1.5rem;
+  }
+
+  .result-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .main-figure-card .plotly {
+    height: 410px !important;
+    min-height: 390px;
+  }
+}

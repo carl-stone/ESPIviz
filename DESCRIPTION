@@ -1,0 +1,28 @@
+Package: ESPIviz
+Type: Project
+Title: Standalone Public Explorer for the ESPI Study
+Version: 1.0.0
+Authors@R: person("Carl", "Stone", role = c("aut", "cre"), email = "carl.j.stone@vanderbilt.edu")
+Description: A modular Shiny application and standalone exporter for exploring
+    the final ESPI single-cell analysis data bundle.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends:
+    R (>= 4.6.0)
+Imports:
+    bslib,
+    digest,
+    DT,
+    ggplot2,
+    htmltools,
+    jsonlite,
+    Matrix,
+    plotly,
+    shiny
+Suggests:
+    AnnotationDbi,
+    org.Mm.eg.db,
+    rsconnect,
+    SeuratObject,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

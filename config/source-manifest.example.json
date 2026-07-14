@@ -1,0 +1,28 @@
+{
+  "manifest_version": "1.0.0",
+  "source_object": {
+    "path": "/absolute/path/to/frozen-source-object.rds",
+    "sha256": "ed320802451f9f426b1ca1e72b5f8bcd6bbd6f1095693fec17253903e62edc67"
+  },
+  "primary_de": {
+    "path": "/absolute/path/to/primary-condition-de.tsv"
+  },
+  "markers": {
+    "path": "/absolute/path/to/final-cluster-markers.csv"
+  },
+  "ora_up": {
+    "path": "/absolute/path/to/ora-up.tsv"
+  },
+  "ora_down": {
+    "path": "/absolute/path/to/ora-down.tsv"
+  },
+  "gsea": {
+    "path": "/absolute/path/to/gsea.tsv"
+  },
+  "featured_genes_config": {
+    "path": "/absolute/path/to/ESPIviz/config/featured-genes.csv"
+  },
+  "featured_pathways_config": {
+    "path": "/absolute/path/to/ESPIviz/config/featured-pathways.csv"
+  }
+}

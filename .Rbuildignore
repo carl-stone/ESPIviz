@@ -1,0 +1,7 @@
+^\.github$
+^app$
+^config$
+^scripts$
+^tests$
+^justfile$
+^DATA_LICENSE\.md$

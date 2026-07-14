@@ -1,0 +1,9 @@
+pathway_id,label,source,result_id,direction,display_order
+apoptotic_signaling,Apoptotic signaling,ora_up,GO:2001233,E-Stim,1
+oxidative_stress,Oxidative stress,gsea,GO:0006979,E-Stim,2
+mitochondrion_organization,Mitochondrion organization,gsea,GO:0007005,E-Stim,3
+small_molecule_catabolism,Small molecule catabolism,gsea,GO:0044282,E-Stim,4
+dna_replication,DNA replication,gsea,GO:0006261,Control,5
+mitotic_cell_cycle,Mitotic cell cycle phase transition,gsea,GO:0044772,Control,6
+chromosome_segregation,Chromosome segregation,ora_down,GO:0007059,Control,7
+nuclear_division,Nuclear division,ora_down,GO:0000280,Control,8

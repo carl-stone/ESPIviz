@@ -1,0 +1,76 @@
+set_id,set_label,gene,display_order
+study_highlights,Study highlights,Glul,1
+study_highlights,Study highlights,Ccn1,1
+study_highlights,Study highlights,Mcm2,1
+study_highlights,Study highlights,Mcm6,1
+study_highlights,Study highlights,Hes6,1
+study_highlights,Study highlights,Grm6,1
+study_highlights,Study highlights,Scgn,1
+study_highlights,Study highlights,Rcvrn,1
+study_highlights,Study highlights,Cdkn1b,1
+study_highlights,Study highlights,EGFP,1
+muller_glia,Müller glia,Rlbp1,2
+muller_glia,Müller glia,Glul,2
+muller_glia,Müller glia,Vim,2
+muller_glia,Müller glia,Slc1a3,2
+muller_glia,Müller glia,Sox9,2
+muller_glia,Müller glia,Hes1,2
+activated_muller_glia,Activated Müller glia,Gfap,3
+activated_muller_glia,Activated Müller glia,Lcn2,3
+activated_muller_glia,Activated Müller glia,Serpina3n,3
+activated_muller_glia,Activated Müller glia,Ccn1,3
+activated_muller_glia,Activated Müller glia,Il6,3
+proliferative,Proliferative,Pcna,4
+proliferative,Proliferative,Mcm2,4
+proliferative,Proliferative,Mcm6,4
+proliferative,Proliferative,Ccnd1,4
+proliferative,Proliferative,Cdk4,4
+proliferative,Proliferative,Cdk6,4
+neurogenic_progenitor,Neurogenic progenitor,Ascl1,5
+neurogenic_progenitor,Neurogenic progenitor,Hes6,5
+neurogenic_progenitor,Neurogenic progenitor,Hes5,5
+neurogenic_progenitor,Neurogenic progenitor,Neurog2,5
+neurogenic_progenitor,Neurogenic progenitor,Dll1,5
+neurogenic_progenitor,Neurogenic progenitor,Dll3,5
+neurogenic_progenitor,Neurogenic progenitor,Neurod1,5
+neurogenic_progenitor,Neurogenic progenitor,Stmn1,5
+neurogenic_progenitor,Neurogenic progenitor,Stmn2,5
+cone_bipolar,Cone bipolar,Otx2,6
+cone_bipolar,Cone bipolar,Vsx2,6
+cone_bipolar,Cone bipolar,Cabp5,6
+cone_bipolar,Cone bipolar,Scgn,6
+cone_bipolar,Cone bipolar,Lhx4,6
+cone_bipolar,Cone bipolar,Grik1,6
+rod_bipolar,Rod bipolar,Prkca,7
+rod_bipolar,Rod bipolar,Grm6,7
+rod_bipolar,Rod bipolar,Car8,7
+photoreceptor,Photoreceptor,Crx,8
+photoreceptor,Photoreceptor,Rcvrn,8
+photoreceptor,Photoreceptor,Arr3,8
+photoreceptor,Photoreceptor,Rho,8
+photoreceptor,Photoreceptor,Esrrb,8
+photoreceptor,Photoreceptor,Nrl,8
+photoreceptor,Photoreceptor,Nr2e3,8
+photoreceptor,Photoreceptor,Pde6g,8
+photoreceptor,Photoreceptor,Rxrg,8
+retinal_ganglion,Retinal ganglion,Chrna4,9
+retinal_ganglion,Retinal ganglion,Rbpms,9
+retinal_ganglion,Retinal ganglion,Thy1,9
+retinal_ganglion,Retinal ganglion,Sncg,9
+retinal_ganglion,Retinal ganglion,Slc17a6,9
+microglia,Microglia,C1qa,10
+microglia,Microglia,C1qb,10
+microglia,Microglia,C1qc,10
+microglia,Microglia,Cx3cr1,10
+microglia,Microglia,Igf1,10
+horizontal,Horizontal,Onecut1,11
+horizontal,Horizontal,Onecut2,11
+horizontal,Horizontal,Lhx1,11
+horizontal,Horizontal,Prox1,11
+horizontal,Horizontal,Calb1,11
+horizontal,Horizontal,Megf10,11
+horizontal,Horizontal,Ntrk1,11
+amacrine,Amacrine,Tfap2a,12
+amacrine,Amacrine,Tfap2b,12
+amacrine,Amacrine,Pax6,12
+amacrine,Amacrine,Calb2,12
