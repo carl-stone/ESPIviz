@@ -1,14 +1,30 @@
 maintenance_ui <- function() {
   bslib::page_fillable(
-    theme = bslib::bs_theme(version = 5, bg = "#f5f2ec", fg = "#17232b", primary = "#9d2857"),
-    htmltools::tags$link(rel = "stylesheet", type = "text/css", href = "styles.css"),
+    theme = bslib::bs_theme(
+      version = 5,
+      bg = "#f5f2ec",
+      fg = "#17232b",
+      primary = "#9d2857"
+    ),
+    htmltools::tags$link(
+      rel = "icon",
+      type = "image/svg+xml",
+      href = "favicon.svg"
+    ),
+    htmltools::tags$link(
+      rel = "stylesheet",
+      type = "text/css",
+      href = "styles.css"
+    ),
     htmltools::tags$main(
       class = "maintenance-shell",
       htmltools::div(
         class = "maintenance-card",
         htmltools::p("ESPIviz", class = "eyebrow"),
         htmltools::h1("The explorer is temporarily unavailable."),
-        htmltools::p("The application data could not be loaded. Please try again later.")
+        htmltools::p(
+          "The application data could not be loaded. Please try again later."
+        )
       )
     )
   )
@@ -22,10 +38,20 @@ app_ui <- function(bundle) {
     primary = "#9d2857",
     secondary = "#526b7b",
     base_font = bslib::font_collection(
-      "Source Sans 3", "Avenir Next", "Segoe UI", "Helvetica Neue", "Arial", "sans-serif"
+      "Source Sans 3",
+      "Avenir Next",
+      "Segoe UI",
+      "Helvetica Neue",
+      "Arial",
+      "sans-serif"
     ),
     heading_font = bslib::font_collection(
-      "Source Serif 4", "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Georgia", "serif"
+      "Source Serif 4",
+      "Iowan Old Style",
+      "Palatino Linotype",
+      "Book Antiqua",
+      "Georgia",
+      "serif"
     ),
     `navbar-bg` = "#17232b",
     `navbar-fg` = "#ffffff",
@@ -39,14 +65,30 @@ app_ui <- function(bundle) {
       htmltools::span("single-cell explorer", class = "brand-subtitle")
     ),
     selected = "Explore",
-    fillable = TRUE,
+    fillable = FALSE,
     fillable_mobile = FALSE,
     theme = theme,
     header = htmltools::tagList(
-      htmltools::tags$meta(name = "description", content = "Interactive explorer for the ESPI single-cell RNA-seq study."),
-      htmltools::tags$link(rel = "stylesheet", type = "text/css", href = "styles.css")
+      htmltools::tags$meta(
+        name = "description",
+        content = "Interactive explorer for the ESPI single-cell RNA-seq study."
+      ),
+      htmltools::tags$link(
+        rel = "icon",
+        type = "image/svg+xml",
+        href = "favicon.svg"
+      ),
+      htmltools::tags$link(
+        rel = "stylesheet",
+        type = "text/css",
+        href = "styles.css"
+      )
     ),
-    bslib::nav_panel("Explore", explore_ui("explore", bundle), value = "Explore"),
+    bslib::nav_panel(
+      "Explore",
+      explore_ui("explore", bundle),
+      value = "Explore"
+    ),
     bslib::nav_panel(
       "Differential expression",
       differential_expression_ui("de"),
@@ -68,7 +110,9 @@ app_view_label <- function(value) {
   )
   key <- tolower(as.character(value %||% ""))
   view <- unname(view_map[key])
-  if (length(view) == 0L || is.na(view)) return(NULL)
+  if (length(view) == 0L || is.na(view)) {
+    return(NULL)
+  }
   view
 }
 
@@ -88,40 +132,61 @@ app_server <- function(bundle) {
     state <- new_app_state(bundle)
     url_initialized <- shiny::reactiveVal(FALSE)
     pending_view <- shiny::reactiveVal(NULL)
-    navigate_explore <- function() bslib::nav_select("main_nav", "Explore", session = session)
+    navigate_explore <- function() {
+      bslib::nav_select("main_nav", "Explore", session = session)
+    }
 
     explore_server("explore", bundle, state)
     differential_expression_server("de", bundle, state, navigate_explore)
     pathways_server("pathways", bundle, state, navigate_explore)
     about_server("about", bundle)
 
-    shiny::observeEvent(session$clientData$url_search, {
-      query <- shiny::parseQueryString(session$clientData$url_search %||% "")
-      view <- app_view_label(query$view)
-      if (!is.null(view)) {
-        pending_view(view)
-        bslib::nav_select("main_nav", view, session = session)
-      }
-      if (!is.null(query$gene)) set_state_gene(state, bundle, query$gene)
-      if (!is.null(query$genes)) replace_state_gene_set(state, bundle, query$genes)
-      if (!is.null(query$pathway) && query$pathway %in% bundle$pathways$pathway_id) {
-        state$active_pathway(query$pathway)
-      }
-      url_initialized(TRUE)
-    }, once = TRUE)
+    shiny::observeEvent(
+      session$clientData$url_search,
+      {
+        query <- shiny::parseQueryString(session$clientData$url_search %||% "")
+        view <- app_view_label(query$view)
+        if (!is.null(view)) {
+          pending_view(view)
+          bslib::nav_select("main_nav", view, session = session)
+        }
+        if (!is.null(query$gene)) {
+          set_state_gene(state, bundle, query$gene)
+        }
+        if (!is.null(query$genes)) {
+          replace_state_gene_set(state, bundle, query$genes)
+        }
+        if (
+          !is.null(query$pathway) &&
+            query$pathway %in% bundle$pathways$pathway_id
+        ) {
+          state$active_pathway(query$pathway)
+        }
+        url_initialized(TRUE)
+      },
+      once = TRUE
+    )
 
     shiny::observe({
       shiny::req(url_initialized())
       current_view <- input$main_nav %||% "Explore"
       initial_view <- pending_view()
-      if (!is.null(initial_view) && !identical(current_view, initial_view)) return()
-      if (!is.null(initial_view)) pending_view(NULL)
+      if (!is.null(initial_view) && !identical(current_view, initial_view)) {
+        return()
+      }
+      if (!is.null(initial_view)) {
+        pending_view(NULL)
+      }
       view_slug <- app_view_slug(current_view)
       query <- paste0(
-        "?view=", utils::URLencode(view_slug, reserved = TRUE),
-        "&gene=", utils::URLencode(state$active_gene(), reserved = TRUE)
+        "?view=",
+        utils::URLencode(view_slug, reserved = TRUE),
+        "&gene=",
+        utils::URLencode(state$active_gene(), reserved = TRUE)
       )
-      if (identical(view_slug, "pathways") && !is.null(state$active_pathway())) {
+      if (
+        identical(view_slug, "pathways") && !is.null(state$active_pathway())
+      ) {
         query <- paste0(
           query,
           "&pathway=",

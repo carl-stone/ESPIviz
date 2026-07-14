@@ -39,8 +39,7 @@ public_bundle_url <- function(manifest) {
 }
 
 manifest_sha256 <- function(manifest) {
-  hash <- manifest$sha256 %||% manifest$asset_sha256 %||%
-    manifest$asset$sha256
+  hash <- manifest$sha256 %||% manifest$asset_sha256 %||% manifest$asset$sha256
   hash <- compact_character(hash)
   if (length(hash) == 0L) NA_character_ else tolower(hash[[1L]])
 }
@@ -51,10 +50,13 @@ manifest_expected <- function(manifest) {
     schema_version = manifest$schema_version %||% ESPIVIZ_SCHEMA_VERSION,
     genes = manifest$gene_count %||% manifest$genes %||% dimensions$genes,
     cells = manifest$cell_count %||% manifest$cells %||% dimensions$cells,
-    clusters = manifest$cluster_count %||% manifest$clusters %||%
+    clusters = manifest$cluster_count %||%
+      manifest$clusters %||%
       dimensions$clusters,
-    de_rows = manifest$de_row_count %||% manifest$de_rows %||%
-      dimensions$primary_de_rows %||% dimensions$de_rows,
+    de_rows = manifest$de_row_count %||%
+      manifest$de_rows %||%
+      dimensions$primary_de_rows %||%
+      dimensions$de_rows,
     source_sha256 = manifest$source_sha256,
     input_sha256 = manifest$input_sha256
   )
@@ -63,9 +65,14 @@ manifest_expected <- function(manifest) {
 production_manifest_expected <- function(manifest) {
   declared <- manifest_expected(manifest)
   for (field in c("genes", "cells", "clusters", "de_rows")) {
-    if (is.null(declared[[field]]) ||
-      as.integer(declared[[field]]) != ESPIVIZ_PRODUCTION_EXPECTED[[field]]) {
-      stop("The data manifest does not match the fixed production contract.", call. = FALSE)
+    if (
+      is.null(declared[[field]]) ||
+        as.integer(declared[[field]]) != ESPIVIZ_PRODUCTION_EXPECTED[[field]]
+    ) {
+      stop(
+        "The data manifest does not match the fixed production contract.",
+        call. = FALSE
+      )
     }
   }
   expected <- ESPIVIZ_PRODUCTION_EXPECTED
@@ -82,11 +89,26 @@ sha256_file <- function(path) {
 }
 
 validate_bundle <- function(bundle, expected = NULL) {
+  if (!requireNamespace("Matrix", quietly = TRUE)) {
+    stop(
+      "The Matrix package is required to validate the data bundle.",
+      call. = FALSE
+    )
+  }
   expected <- expected %||% ESPIVIZ_PRODUCTION_EXPECTED
   required <- c(
-    "schema_version", "data_version", "provenance", "palette", "cells",
-    "genes", "counts", "primary_de", "markers", "pathways",
-    "pathway_genes", "featured_gene_sets"
+    "schema_version",
+    "data_version",
+    "provenance",
+    "palette",
+    "cells",
+    "genes",
+    "counts",
+    "primary_de",
+    "markers",
+    "pathways",
+    "pathway_genes",
+    "featured_gene_sets"
   )
   missing <- setdiff(required, names(bundle))
   if (length(missing) > 0L) {
@@ -116,90 +138,175 @@ validate_bundle <- function(bundle, expected = NULL) {
     expected$schema_version %||% ESPIVIZ_SCHEMA_VERSION
   )
   if (!identical(schema, expected_schema)) {
-    stop("The bundle schema version does not match the application.", call. = FALSE)
+    stop(
+      "The bundle schema version does not match the application.",
+      call. = FALSE
+    )
   }
 
   cell_columns <- c(
-    "cell_id", "umap_1", "umap_2", "cluster", "condition", "Mouse",
-    "sample", "library_size"
+    "cell_id",
+    "umap_1",
+    "umap_2",
+    "cluster",
+    "condition",
+    "Mouse",
+    "sample",
+    "library_size"
   )
-  if (!is.data.frame(bundle$cells) ||
-    !identical(names(bundle$cells), cell_columns)) {
-    stop("The bundle cell table does not match the required schema.", call. = FALSE)
+  if (
+    !is.data.frame(bundle$cells) ||
+      !identical(names(bundle$cells), cell_columns)
+  ) {
+    stop(
+      "The bundle cell table does not match the required schema.",
+      call. = FALSE
+    )
   }
-  if (any(grepl("barcode|(^|_)qc($|_)", names(bundle$cells), ignore.case = TRUE))) {
+  if (
+    any(grepl("barcode|(^|_)qc($|_)", names(bundle$cells), ignore.case = TRUE))
+  ) {
     stop("The bundle cell table contains excluded columns.", call. = FALSE)
   }
-  if (anyDuplicated(bundle$cells$cell_id) ||
-    !all(grepl("^cell_[0-9]+$", bundle$cells$cell_id))) {
-    stop("The bundle must use unique sequential internal cell IDs.", call. = FALSE)
+  if (
+    anyDuplicated(bundle$cells$cell_id) ||
+      !all(grepl("^cell_[0-9]+$", bundle$cells$cell_id))
+  ) {
+    stop(
+      "The bundle must use unique sequential internal cell IDs.",
+      call. = FALSE
+    )
   }
-  cell_sequence <- suppressWarnings(as.integer(sub("^cell_", "", bundle$cells$cell_id)))
-  if (anyNA(cell_sequence) || !identical(cell_sequence, seq_along(cell_sequence))) {
+  cell_sequence <- suppressWarnings(as.integer(sub(
+    "^cell_",
+    "",
+    bundle$cells$cell_id
+  )))
+  if (
+    anyNA(cell_sequence) || !identical(cell_sequence, seq_along(cell_sequence))
+  ) {
     stop("The internal cell IDs are out of order.", call. = FALSE)
   }
-  if (any(!is.finite(bundle$cells$library_size)) ||
-    any(bundle$cells$library_size <= 0)) {
+  if (
+    any(!is.finite(bundle$cells$library_size)) ||
+      any(bundle$cells$library_size <= 0)
+  ) {
     stop("Cell library sizes must be positive finite values.", call. = FALSE)
   }
 
-  if (!is.data.frame(bundle$genes) ||
-    !identical(names(bundle$genes), c("gene", "gene_index")) ||
-    !identical(as.integer(bundle$genes$gene_index), seq_len(nrow(bundle$genes)))) {
-    stop("The bundle gene table does not match the required schema.", call. = FALSE)
+  if (
+    !is.data.frame(bundle$genes) ||
+      !identical(names(bundle$genes), c("gene", "gene_index")) ||
+      !identical(
+        as.integer(bundle$genes$gene_index),
+        seq_len(nrow(bundle$genes))
+      )
+  ) {
+    stop(
+      "The bundle gene table does not match the required schema.",
+      call. = FALSE
+    )
   }
   genes <- bundle_gene_names(bundle)
-  if (length(genes) == 0L || anyNA(genes) || any(!nzchar(genes)) ||
-    anyDuplicated(casefold_key(genes))) {
+  if (
+    length(genes) == 0L ||
+      anyNA(genes) ||
+      any(!nzchar(genes)) ||
+      anyDuplicated(casefold_key(genes))
+  ) {
     stop("The bundle gene universe is invalid or ambiguous.", call. = FALSE)
   }
-  if (!inherits(bundle$counts, "dgCMatrix") ||
-    !identical(dim(bundle$counts), c(nrow(bundle$cells), length(genes)))) {
-    stop("The sparse count matrix dimensions do not match the bundle.", call. = FALSE)
+  if (
+    !inherits(bundle$counts, "dgCMatrix") ||
+      !identical(dim(bundle$counts), c(nrow(bundle$cells), length(genes)))
+  ) {
+    stop(
+      "The sparse count matrix dimensions do not match the bundle.",
+      call. = FALSE
+    )
   }
-  if (!identical(rownames(bundle$counts), as.character(bundle$cells$cell_id)) ||
-    !identical(colnames(bundle$counts), genes)) {
-    stop("The sparse count matrix order does not match the bundle.", call. = FALSE)
+  if (
+    !identical(rownames(bundle$counts), as.character(bundle$cells$cell_id)) ||
+      !identical(colnames(bundle$counts), genes)
+  ) {
+    stop(
+      "The sparse count matrix order does not match the bundle.",
+      call. = FALSE
+    )
   }
 
   de_columns <- c("gene", "log2FoldChange", "pvalue", "padj", "design")
   allowed_de_columns <- c(
-    "gene", "baseMean", "log2FoldChange", "lfcSE", "stat", "pvalue", "padj",
-    "unshrunkenLog2FoldChange", "mean_count_control", "mean_count_estim",
-    "contrast", "design", "lfc_shrink_type"
+    "gene",
+    "baseMean",
+    "log2FoldChange",
+    "lfcSE",
+    "stat",
+    "pvalue",
+    "padj",
+    "unshrunkenLog2FoldChange",
+    "mean_count_control",
+    "mean_count_estim",
+    "contrast",
+    "design",
+    "lfc_shrink_type"
   )
-  if (!is.data.frame(bundle$primary_de) ||
-    !all(de_columns %in% names(bundle$primary_de)) ||
-    any(!names(bundle$primary_de) %in% allowed_de_columns) ||
-    anyDuplicated(casefold_key(bundle$primary_de$gene)) ||
-    any(!bundle$primary_de$gene %in% genes) ||
-    !identical(
-      unique(as.character(bundle$primary_de$design)),
-      "primary_unpaired_condition"
-    )) {
+  if (
+    !is.data.frame(bundle$primary_de) ||
+      !all(de_columns %in% names(bundle$primary_de)) ||
+      any(!names(bundle$primary_de) %in% allowed_de_columns) ||
+      anyDuplicated(casefold_key(bundle$primary_de$gene)) ||
+      any(!bundle$primary_de$gene %in% genes) ||
+      !identical(
+        unique(as.character(bundle$primary_de$design)),
+        "primary_unpaired_condition"
+      )
+  ) {
     stop("The primary differential-expression table is invalid.", call. = FALSE)
   }
   marker_columns <- c(
-    "cluster", "gene", "avg_log2FC", "pct.1", "pct.2", "p_val_adj", "rank"
+    "cluster",
+    "gene",
+    "avg_log2FC",
+    "pct.1",
+    "pct.2",
+    "p_val_adj",
+    "rank"
   )
-  if (!is.data.frame(bundle$markers) ||
-    !identical(names(bundle$markers), marker_columns) ||
-    any(!bundle$markers$gene %in% genes)) {
+  if (
+    !is.data.frame(bundle$markers) ||
+      !identical(names(bundle$markers), marker_columns) ||
+      any(!bundle$markers$gene %in% genes)
+  ) {
     stop("The marker table is invalid.", call. = FALSE)
   }
   pathway_columns <- c(
-    "pathway_id", "label", "source", "direction", "description", "p_value",
-    "p_adjust", "score", "gene_count"
+    "pathway_id",
+    "label",
+    "source",
+    "direction",
+    "description",
+    "p_value",
+    "p_adjust",
+    "score",
+    "gene_count"
   )
-  if (!is.data.frame(bundle$pathways) ||
-    !identical(names(bundle$pathways), pathway_columns) ||
-    !is.data.frame(bundle$pathway_genes) ||
-    !identical(names(bundle$pathway_genes), c("pathway_id", "gene"))) {
+  if (
+    !is.data.frame(bundle$pathways) ||
+      !identical(names(bundle$pathways), pathway_columns) ||
+      !is.data.frame(bundle$pathway_genes) ||
+      !identical(names(bundle$pathway_genes), c("pathway_id", "gene"))
+  ) {
     stop("The featured pathway tables are invalid.", call. = FALSE)
   }
-  if (any(!bundle$pathway_genes$pathway_id %in% bundle$pathways$pathway_id) ||
-    any(!bundle$pathway_genes$gene %in% genes)) {
-    stop("The featured pathway genes are outside the public schema.", call. = FALSE)
+  if (
+    any(!bundle$pathway_genes$pathway_id %in% bundle$pathways$pathway_id) ||
+      any(!bundle$pathway_genes$gene %in% genes)
+  ) {
+    stop(
+      "The featured pathway genes are outside the public schema.",
+      call. = FALSE
+    )
   }
   if (!is.list(bundle$featured_gene_sets)) {
     stop("Featured gene sets must be stored as a named list.", call. = FALSE)
@@ -217,10 +324,19 @@ validate_bundle <- function(bundle, expected = NULL) {
   )
   for (field in names(actual)) {
     target <- expected[[field]]
-    if (!is.null(target) && length(target) > 0L && !is.na(target) &&
-      actual[[field]] != as.integer(target)) {
+    if (
+      !is.null(target) &&
+        length(target) > 0L &&
+        !is.na(target) &&
+        actual[[field]] != as.integer(target)
+    ) {
       stop(
-        sprintf("The bundle %s count is %s; expected %s.", field, actual[[field]], target),
+        sprintf(
+          "The bundle %s count is %s; expected %s.",
+          field,
+          actual[[field]],
+          target
+        ),
         call. = FALSE
       )
     }
@@ -229,20 +345,47 @@ validate_bundle <- function(bundle, expected = NULL) {
   expected_source_hash <- compact_character(expected$source_sha256)
   if (length(expected_source_hash) > 0L) {
     provenance_hash <- compact_character(bundle$provenance$source_sha256)
-    nested_hash <- compact_character(bundle$provenance$inputs$source_object$sha256)
-    if (length(provenance_hash) == 0L || length(nested_hash) == 0L ||
-      !identical(tolower(provenance_hash[[1L]]), tolower(expected_source_hash[[1L]])) ||
-      !identical(tolower(nested_hash[[1L]]), tolower(expected_source_hash[[1L]]))) {
-      stop("The frozen source checksum does not match the data manifest.", call. = FALSE)
+    nested_hash <- compact_character(
+      bundle$provenance$inputs$source_object$sha256
+    )
+    if (
+      length(provenance_hash) == 0L ||
+        length(nested_hash) == 0L ||
+        !identical(
+          tolower(provenance_hash[[1L]]),
+          tolower(expected_source_hash[[1L]])
+        ) ||
+        !identical(
+          tolower(nested_hash[[1L]]),
+          tolower(expected_source_hash[[1L]])
+        )
+    ) {
+      stop(
+        "The frozen source checksum does not match the data manifest.",
+        call. = FALSE
+      )
     }
   }
-  if (!is.null(expected$reduction) &&
-    !identical(as.character(bundle$provenance$reduction), expected$reduction)) {
-    stop("The bundle reduction does not match the fixed production contract.", call. = FALSE)
+  if (
+    !is.null(expected$reduction) &&
+      !identical(as.character(bundle$provenance$reduction), expected$reduction)
+  ) {
+    stop(
+      "The bundle reduction does not match the fixed production contract.",
+      call. = FALSE
+    )
   }
-  if (!is.null(expected$cluster_column) &&
-    !identical(as.character(bundle$provenance$cluster_column), expected$cluster_column)) {
-    stop("The bundle cluster column does not match the fixed production contract.", call. = FALSE)
+  if (
+    !is.null(expected$cluster_column) &&
+      !identical(
+        as.character(bundle$provenance$cluster_column),
+        expected$cluster_column
+      )
+  ) {
+    stop(
+      "The bundle cluster column does not match the fixed production contract.",
+      call. = FALSE
+    )
   }
   expected_inputs <- expected$input_sha256 %||% list()
   if (length(expected_inputs) > 0L) {
@@ -251,25 +394,35 @@ validate_bundle <- function(bundle, expected = NULL) {
       provenance_input_hash <- compact_character(
         bundle$provenance$inputs[[input_name]]$sha256
       )
-      if (length(expected_input_hash) > 0L &&
-        (length(provenance_input_hash) == 0L ||
-          !identical(
-            tolower(provenance_input_hash[[1L]]),
-            tolower(expected_input_hash[[1L]])
-          ))) {
-        stop("An imported result checksum does not match the data manifest.", call. = FALSE)
+      if (
+        length(expected_input_hash) > 0L &&
+          (length(provenance_input_hash) == 0L ||
+            !identical(
+              tolower(provenance_input_hash[[1L]]),
+              tolower(expected_input_hash[[1L]])
+            ))
+      ) {
+        stop(
+          "An imported result checksum does not match the data manifest.",
+          call. = FALSE
+        )
       }
     }
   }
 
   serialized_strings <- unlist(bundle$provenance, use.names = FALSE)
   serialized_strings <- serialized_strings[is.character(serialized_strings)]
-  if (any(grepl(
-    "/Users/|Box-Box|/Box/|Library/CloudStorage|file://|\\\\Box\\\\",
-    serialized_strings,
-    fixed = FALSE
-  ))) {
-    stop("The bundle provenance contains a private storage path.", call. = FALSE)
+  if (
+    any(grepl(
+      "/Users/|Box-Box|/Box/|Library/CloudStorage|file://|\\\\Box\\\\",
+      serialized_strings,
+      fixed = FALSE
+    ))
+  ) {
+    stop(
+      "The bundle provenance contains a private storage path.",
+      call. = FALSE
+    )
   }
 
   invisible(TRUE)
@@ -296,7 +449,12 @@ download_bundle_asset <- function(url, data_version) {
   destination
 }
 
-load_bundle <- function(path, manifest, expected = NULL, expected_sha256 = NULL) {
+load_bundle <- function(
+  path,
+  manifest,
+  expected = NULL,
+  expected_sha256 = NULL
+) {
   if (is.character(manifest) && length(manifest) == 1L) {
     manifest <- read_data_manifest(manifest)
   }
@@ -313,9 +471,14 @@ load_bundle <- function(path, manifest, expected = NULL, expected_sha256 = NULL)
   } else {
     compact_character(manifest_sha256(manifest))
   }
-  if (length(expected_hash) == 0L ||
-    !grepl("^[0-9a-fA-F]{64}$", expected_hash[[1L]])) {
-    stop("The data manifest does not contain a valid SHA-256 checksum.", call. = FALSE)
+  if (
+    length(expected_hash) == 0L ||
+      !grepl("^[0-9a-fA-F]{64}$", expected_hash[[1L]])
+  ) {
+    stop(
+      "The data manifest does not contain a valid SHA-256 checksum.",
+      call. = FALSE
+    )
   }
   if (!identical(sha256_file(path), tolower(expected_hash[[1L]]))) {
     stop("The data bundle checksum does not match the manifest.", call. = FALSE)
@@ -329,9 +492,10 @@ load_bundle <- function(path, manifest, expected = NULL, expected_sha256 = NULL)
 }
 
 load_public_bundle <- function(
-    manifest_path = file.path("app", "data-manifest.json"),
-    path = NULL,
-    expected_sha256 = NULL) {
+  manifest_path = file.path("app", "data-manifest.json"),
+  path = NULL,
+  expected_sha256 = NULL
+) {
   manifest <- read_data_manifest(manifest_path)
   path <- compact_character(path %||% Sys.getenv("ESPIVIZ_DATA_PATH", ""))
   if (length(path) > 0L) {

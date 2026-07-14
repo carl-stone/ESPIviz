@@ -12,9 +12,36 @@ test_that("application exposes exactly the four public navigation areas", {
   )
 })
 
+test_that("desktop pages use natural height so plots and tables do not collapse", {
+  html <- htmltools::renderTags(app_ui(synthetic_bundle()))$html
+
+  expect_no_match(html, '<body class="bslib-page-fill', fixed = TRUE)
+})
+
+test_that("Explore result panels span the full plotting grid", {
+  html <- htmltools::renderTags(
+    explore_ui("explore_test", synthetic_bundle())
+  )$html
+
+  expect_match(html, 'col-widths-sm="8,4,12"', fixed = TRUE)
+})
+
+test_that("secondary full-width panels span their plotting grids", {
+  de_html <- htmltools::renderTags(differential_expression_ui("de_test"))$html
+  pathway_html <- htmltools::renderTags(pathways_ui("pathways_test"))$html
+  about_html <- htmltools::renderTags(about_ui("about_test"))$html
+
+  expect_match(de_html, 'col-widths-sm="8,4,12"', fixed = TRUE)
+  expect_match(pathway_html, 'col-widths-sm="7,5,12"', fixed = TRUE)
+  expect_match(about_html, 'col-widths-sm="7,5,12"', fixed = TRUE)
+})
+
 test_that("Explore limits UMAP colors and exposes every selection mode", {
   expect_app_helper("explore_ui")
-  html <- htmltools::renderTags(explore_ui("explore_test", synthetic_bundle()))$html
+  html <- htmltools::renderTags(explore_ui(
+    "explore_test",
+    synthetic_bundle()
+  ))$html
 
   expect_match(html, "Gene expression", fixed = TRUE)
   expect_match(html, ">Cluster<", fixed = TRUE)
@@ -22,6 +49,27 @@ test_that("Explore limits UMAP colors and exposes every selection mode", {
   expect_match(html, "Clear selection", fixed = TRUE)
   expect_match(html, "Click a cell or use box or lasso", fixed = TRUE)
   expect_no_match(html, "QC", fixed = TRUE)
+})
+
+test_that("Explore exposes an explicit whole-cluster selection control", {
+  html <- htmltools::renderTags(
+    explore_ui("explore_test", synthetic_bundle())
+  )$html
+
+  expect_match(html, "Select cells by cluster", fixed = TRUE)
+  expect_match(html, "explore_test-select_cluster", fixed = TRUE)
+  expect_match(html, "explore_test-select_cluster_cells", fixed = TRUE)
+})
+
+test_that("Explore provides plotted summaries by cluster and condition", {
+  html <- htmltools::renderTags(
+    explore_ui("explore_test", synthetic_bundle())
+  )$html
+
+  expect_match(html, "explore_test-cluster_summary_plot_ui", fixed = TRUE)
+  expect_match(html, "explore_test-condition_summary_plot_ui", fixed = TRUE)
+  expect_match(html, "Mean expression", fixed = TRUE)
+  expect_match(html, "dot size", fixed = TRUE)
 })
 
 test_that("all requested application downloads are wired into the UI", {
@@ -101,11 +149,29 @@ test_that("deep-link view names map without falling back early", {
   expect_app_helper("app_view_slug")
 
   expect_identical(app_view_label("de"), "Differential expression")
-  expect_identical(app_view_label("DIFFERENTIAL_EXPRESSION"), "Differential expression")
+  expect_identical(
+    app_view_label("DIFFERENTIAL_EXPRESSION"),
+    "Differential expression"
+  )
   expect_identical(app_view_label("pathways"), "Pathways")
   expect_identical(app_view_label("about"), "About")
   expect_null(app_view_label("unknown"))
   expect_identical(app_view_slug("Differential expression"), "de")
   expect_identical(app_view_slug("Pathways"), "pathways")
   expect_identical(app_view_slug("About"), "about")
+})
+
+test_that("narrow desktop layouts collapse and overlay the Explore sidebar", {
+  styles <- paste(
+    readLines(file.path(repo_root, "app", "www", "styles.css"), warn = FALSE),
+    collapse = "\n"
+  )
+
+  expect_match(styles, "@media (max-width: 900px)", fixed = TRUE)
+  expect_match(styles, "--bslib-sidebar-js-window-size: mobile", fixed = TRUE)
+  expect_match(
+    styles,
+    ".bslib-sidebar-layout:not(.sidebar-collapsed) > .sidebar",
+    fixed = TRUE
+  )
 })

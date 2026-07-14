@@ -1,16 +1,27 @@
 de_column <- function(data, candidates, required = TRUE) {
   match <- candidates[candidates %in% names(data)]
-  if (length(match) > 0L) return(match[[1L]])
+  if (length(match) > 0L) {
+    return(match[[1L]])
+  }
   if (isTRUE(required)) {
-    stop("The differential-expression table is missing a required column.", call. = FALSE)
+    stop(
+      "The differential-expression table is missing a required column.",
+      call. = FALSE
+    )
   }
   NULL
 }
 
 prepare_de_plot_data <- function(primary_de) {
   gene_column <- de_column(primary_de, c("gene"))
-  fold_change_column <- de_column(primary_de, c("log2FoldChange", "log2_fold_change", "logFC"))
-  probability_column <- de_column(primary_de, c("padj", "p_adjust", "FDR", "pvalue", "p_value"))
+  fold_change_column <- de_column(
+    primary_de,
+    c("log2FoldChange", "log2_fold_change", "logFC")
+  )
+  probability_column <- de_column(
+    primary_de,
+    c("padj", "p_adjust", "FDR", "pvalue", "p_value")
+  )
   data <- data.frame(
     gene = as.character(primary_de[[gene_column]]),
     log2_fold_change = as.numeric(primary_de[[fold_change_column]]),
@@ -29,8 +40,10 @@ make_de_plotly <- function(primary_de, active_gene, source) {
   data <- prepare_de_plot_data(primary_de)
   hover <- paste0(
     data$gene,
-    "<br>log2 fold change: ", formatC(data$log2_fold_change, digits = 4L, format = "fg"),
-    "<br>Adjusted P: ", formatC(data$probability, digits = 4L, format = "g")
+    "<br>log2 fold change: ",
+    formatC(data$log2_fold_change, digits = 4L, format = "fg"),
+    "<br>Adjusted P: ",
+    formatC(data$probability, digits = 4L, format = "g")
   )
   plot <- plotly::plot_ly(
     data = data,
@@ -41,11 +54,20 @@ make_de_plotly <- function(primary_de, active_gene, source) {
     hoverinfo = "text",
     type = "scattergl",
     mode = "markers",
-    marker = list(size = 4.5, color = "#526b7b", opacity = 0.48, line = list(width = 0)),
+    marker = list(
+      size = 4.5,
+      color = "#526b7b",
+      opacity = 0.48,
+      line = list(width = 0)
+    ),
     source = source,
     showlegend = FALSE
   )
-  highlighted <- data[casefold_key(data$gene) == casefold_key(active_gene), , drop = FALSE]
+  highlighted <- data[
+    casefold_key(data$gene) == casefold_key(active_gene),
+    ,
+    drop = FALSE
+  ]
   if (nrow(highlighted) > 0L) {
     plot <- plotly::add_trace(
       plot,
@@ -55,20 +77,30 @@ make_de_plotly <- function(primary_de, active_gene, source) {
       key = ~gene,
       text = paste0(
         highlighted$gene,
-        "<br>log2 fold change: ", formatC(highlighted$log2_fold_change, digits = 4L, format = "fg"),
-        "<br>Adjusted P: ", formatC(highlighted$probability, digits = 4L, format = "g")
+        "<br>log2 fold change: ",
+        formatC(highlighted$log2_fold_change, digits = 4L, format = "fg"),
+        "<br>Adjusted P: ",
+        formatC(highlighted$probability, digits = 4L, format = "g")
       ),
       hoverinfo = "text",
       type = "scatter",
       mode = "markers",
-      marker = list(size = 10, color = "#b52865", line = list(color = "white", width = 1.2)),
+      marker = list(
+        size = 10,
+        color = "#b52865",
+        line = list(color = "white", width = 1.2)
+      ),
       inherit = FALSE,
       showlegend = FALSE
     )
   }
   plot <- plotly::layout(
     plot,
-    xaxis = list(title = "log2 fold change", zeroline = TRUE, zerolinecolor = "#b8c1c8"),
+    xaxis = list(
+      title = "log2 fold change",
+      zeroline = TRUE,
+      zerolinecolor = "#b8c1c8"
+    ),
     yaxis = list(title = "−log10 adjusted P", rangemode = "tozero"),
     margin = list(l = 70, r = 20, t = 18, b = 58),
     hovermode = "closest"
@@ -118,11 +150,15 @@ differential_expression_ui <- function(id) {
       ),
       htmltools::div(
         class = "heading-actions",
-        shiny::downloadButton(ns("download_de"), "Download complete table", class = "btn-primary")
+        shiny::downloadButton(
+          ns("download_de"),
+          "Download complete table",
+          class = "btn-primary"
+        )
       )
     ),
     bslib::layout_columns(
-      col_widths = c(8, 4),
+      col_widths = c(8, 4, 12),
       bslib::card(
         full_screen = TRUE,
         bslib::card_header("Volcano plot"),
@@ -131,12 +167,28 @@ differential_expression_ui <- function(id) {
       bslib::card(
         bslib::card_header("Current gene"),
         shiny::uiOutput(ns("current_gene")),
-        shiny::actionButton(ns("explore_current"), "Open in Explore", class = "btn-primary w-100"),
+        shiny::actionButton(
+          ns("explore_current"),
+          "Open in Explore",
+          class = "btn-primary w-100"
+        ),
         htmltools::hr(),
-        htmltools::p("Choose a point or table row to change the current gene.", class = "supporting-copy"),
-        htmltools::div(class = "download-stack",
-          shiny::downloadButton(ns("download_volcano_png"), "Volcano PNG", class = "btn-outline-primary btn-sm"),
-          shiny::downloadButton(ns("download_volcano_pdf"), "Volcano PDF", class = "btn-outline-primary btn-sm")
+        htmltools::p(
+          "Choose a point or table row to change the current gene.",
+          class = "supporting-copy"
+        ),
+        htmltools::div(
+          class = "download-stack",
+          shiny::downloadButton(
+            ns("download_volcano_png"),
+            "Volcano PNG",
+            class = "btn-outline-primary btn-sm"
+          ),
+          shiny::downloadButton(
+            ns("download_volcano_pdf"),
+            "Volcano PDF",
+            class = "btn-outline-primary btn-sm"
+          )
         )
       ),
       bslib::card(
@@ -148,7 +200,12 @@ differential_expression_ui <- function(id) {
   )
 }
 
-differential_expression_server <- function(id, bundle, state, navigate_explore) {
+differential_expression_server <- function(
+  id,
+  bundle,
+  state,
+  navigate_explore
+) {
   shiny::moduleServer(id, function(input, output, session) {
     source_id <- session$ns("de_source")
 
@@ -165,35 +222,42 @@ differential_expression_server <- function(id, bundle, state, navigate_explore) 
       )
     })
 
-    shiny::observeEvent(plotly::event_data(
-      "plotly_click",
-      source = source_id,
-      priority = "event"
-    ), {
-      event <- plotly::event_data("plotly_click", source = source_id)
-      genes <- compact_character(event$key)
-      if (length(genes) > 0L) set_state_gene(state, bundle, genes[[1L]])
-    }, ignoreNULL = TRUE)
+    shiny::observeEvent(
+      plotly::event_data(
+        "plotly_click",
+        source = source_id,
+        priority = "event"
+      ),
+      {
+        event <- plotly::event_data("plotly_click", source = source_id)
+        genes <- compact_character(event$key)
+        if (length(genes) > 0L) set_state_gene(state, bundle, genes[[1L]])
+      },
+      ignoreNULL = TRUE
+    )
 
-    output$de_table <- DT::renderDT({
-      DT::datatable(
-        bundle$primary_de,
-        rownames = FALSE,
-        filter = "top",
-        selection = "single",
-        class = "compact stripe",
-        extensions = "Scroller",
-        options = list(
-          deferRender = TRUE,
-          scrollX = TRUE,
-          scrollY = 610,
-          scroller = TRUE,
-          pageLength = 50L,
-          lengthChange = FALSE,
-          search = list(caseInsensitive = TRUE)
+    output$de_table <- DT::renderDT(
+      {
+        DT::datatable(
+          bundle$primary_de,
+          rownames = FALSE,
+          filter = "top",
+          selection = "single",
+          class = "compact stripe",
+          extensions = "Scroller",
+          options = list(
+            deferRender = TRUE,
+            scrollX = TRUE,
+            scrollY = 610,
+            scroller = TRUE,
+            pageLength = 50L,
+            lengthChange = FALSE,
+            search = list(caseInsensitive = TRUE)
+          )
         )
-      )
-    }, server = TRUE)
+      },
+      server = TRUE
+    )
 
     shiny::observeEvent(input$de_table_rows_selected, {
       row <- input$de_table_rows_selected
@@ -205,7 +269,9 @@ differential_expression_server <- function(id, bundle, state, navigate_explore) 
     shiny::observeEvent(input$explore_current, navigate_explore())
 
     output$download_de <- shiny::downloadHandler(
-      filename = function() "espiviz-primary-condition-differential-expression.csv",
+      filename = function() {
+        "espiviz-primary-condition-differential-expression.csv"
+      },
       content = function(file) {
         utils::write.csv(bundle$primary_de, file, row.names = FALSE, na = "")
       }

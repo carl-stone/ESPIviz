@@ -23,7 +23,10 @@ test_that("public data manifest pins one immutable release asset", {
     )
   )
   expect_match(manifest$asset_sha256, "^[0-9a-f]{64}$")
-  expect_false(identical(manifest$asset_sha256, paste(rep("0", 64), collapse = "")))
+  expect_false(identical(
+    manifest$asset_sha256,
+    paste(rep("0", 64), collapse = "")
+  ))
   expect_gt(manifest$asset_bytes, 0)
   expect_lt(manifest$asset_bytes, 150 * 1024^2)
   expect_match(manifest$source_sha256, "^[0-9a-f]{64}$")
@@ -45,7 +48,10 @@ test_that("public data manifest pins one immutable release asset", {
 
 test_that("local release asset matches the public manifest when present", {
   bundle_path <- file.path(repo_root, "release", "espiviz-data-v1.0.0.rds")
-  testthat::skip_if_not(file.exists(bundle_path), "Local release asset is not committed")
+  testthat::skip_if_not(
+    file.exists(bundle_path),
+    "Local release asset is not committed"
+  )
   manifest <- jsonlite::read_json(
     file.path(repo_root, "app", "data-manifest.json"),
     simplifyVector = TRUE
@@ -62,7 +68,10 @@ test_that("local release asset matches the public manifest when present", {
     stringsAsFactors = FALSE
   )
   expect_identical(nrow(bundle$pathways), nrow(featured_pathway_config))
-  expect_setequal(bundle$pathways$pathway_id, featured_pathway_config$pathway_id)
+  expect_setequal(
+    bundle$pathways$pathway_id,
+    featured_pathway_config$pathway_id
+  )
   marker_counts <- table(bundle$markers$cluster)
   expect_true(all(marker_counts <= 25L))
   expect_false(any(grepl(
@@ -70,9 +79,16 @@ test_that("local release asset matches the public manifest when present", {
     bundle$primary_de$design,
     ignore.case = TRUE
   )))
-  expect_false(any(c(
-    "barcode", "nFeature_RNA", "nCount_RNA", "percent.mt", "paired_sensitivity"
-  ) %in% c(names(bundle), names(bundle$cells))))
+  expect_false(any(
+    c(
+      "barcode",
+      "nFeature_RNA",
+      "nCount_RNA",
+      "percent.mt",
+      "paired_sensitivity"
+    ) %in%
+      c(names(bundle), names(bundle$cells))
+  ))
 })
 
 test_that("Connect manifest contains only app runtime files and dependencies", {
@@ -84,18 +100,49 @@ test_that("Connect manifest contains only app runtime files and dependencies", {
 
   expect_identical(manifest$platform, "4.6.0")
   expect_identical(manifest$metadata$appmode, "shiny")
-  expect_true(all(c(
-    "app.R",
-    "data-manifest.json",
-    "R/00-utils.R",
-    "R/90-app-shell.R",
-    "www/styles.css"
-  ) %in% file_names))
+  expect_true(all(
+    c(
+      "app.R",
+      "data-manifest.json",
+      "R/00-utils.R",
+      "R/90-app-shell.R",
+      "www/favicon.svg",
+      "www/styles.css"
+    ) %in%
+      file_names
+  ))
   expect_false(any(grepl("^(scripts|config|tests)/", file_names)))
-  expect_false(any(c(
-    "Seurat", "SeuratObject", "AnnotationDbi", "org.Mm.eg.db", "ESPI"
-  ) %in% package_names))
-  expect_true(all(c(
-    "shiny", "bslib", "plotly", "DT", "ggplot2", "jsonlite", "digest"
-  ) %in% package_names))
+  expect_false(any(
+    c(
+      "Seurat",
+      "SeuratObject",
+      "AnnotationDbi",
+      "org.Mm.eg.db",
+      "ESPI"
+    ) %in%
+      package_names
+  ))
+  expect_true(all(
+    c(
+      "shiny",
+      "bslib",
+      "plotly",
+      "DT",
+      "ggplot2",
+      "jsonlite",
+      "digest",
+      "Matrix"
+    ) %in%
+      package_names
+  ))
+
+  for (file_name in file_names) {
+    file_path <- file.path(repo_root, "app", file_name)
+    expect_true(file.exists(file_path), info = file_name)
+    expect_identical(
+      unname(tools::md5sum(file_path)),
+      manifest$files[[file_name]]$checksum,
+      info = paste("Stale Connect manifest entry:", file_name)
+    )
+  }
 })

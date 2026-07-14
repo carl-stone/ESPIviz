@@ -8,8 +8,10 @@ provenance_value <- function(provenance, names) {
 
 https_url <- function(value) {
   value <- compact_character(value)
-  if (length(value) == 0L ||
-    !grepl("^https://[^[:space:]]+$", value[[1L]], perl = TRUE)) {
+  if (
+    length(value) == 0L ||
+      !grepl("^https://[^[:space:]]+$", value[[1L]], perl = TRUE)
+  ) {
     return(NA_character_)
   }
   value[[1L]]
@@ -19,8 +21,12 @@ published_bundle_url <- function(bundle) {
   manifest <- attr(bundle, "data_manifest") %||% list()
   hash <- manifest_sha256(manifest)
   url <- https_url(public_bundle_url(manifest))
-  if (is.na(url) || is.na(hash) || !grepl("^[0-9a-f]{64}$", hash) ||
-    identical(hash, paste(rep("0", 64L), collapse = ""))) {
+  if (
+    is.na(url) ||
+      is.na(hash) ||
+      !grepl("^[0-9a-f]{64}$", hash) ||
+      identical(hash, paste(rep("0", 64L), collapse = ""))
+  ) {
     return(NA_character_)
   }
   url
@@ -46,7 +52,7 @@ about_ui <- function(id) {
       )
     ),
     bslib::layout_columns(
-      col_widths = c(7, 5),
+      col_widths = c(7, 5, 12),
       bslib::card(
         bslib::card_header("Study"),
         htmltools::p(
@@ -59,7 +65,11 @@ about_ui <- function(id) {
       bslib::card(
         bslib::card_header("Data"),
         shiny::uiOutput(ns("data_links")),
-        shiny::downloadButton(ns("download_bundle"), "Download processed app bundle", class = "btn-primary")
+        shiny::downloadButton(
+          ns("download_bundle"),
+          "Download processed app bundle",
+          class = "btn-primary"
+        )
       ),
       bslib::card(
         class = "span-12 methods-card",
@@ -100,33 +110,50 @@ data_links_ui <- function(bundle) {
   provenance <- bundle$provenance %||% list()
   links <- list()
   bundle_url <- published_bundle_url(bundle)
-  data_url <- https_url(provenance_value(provenance, c("data_url", "data_repository_url")))
-  code_url <- https_url(provenance_value(provenance, c("code_url", "application_code_url")))
-  if (is.na(code_url)) code_url <- "https://github.com/carl-stone/ESPIviz"
+  data_url <- https_url(provenance_value(
+    provenance,
+    c("data_url", "data_repository_url")
+  ))
+  code_url <- https_url(provenance_value(
+    provenance,
+    c("code_url", "application_code_url")
+  ))
+  if (is.na(code_url)) {
+    code_url <- "https://github.com/carl-stone/ESPIviz"
+  }
   doi <- provenance_value(provenance, c("manuscript_doi", "doi"))
   if (!is.na(bundle_url)) {
-    links <- c(links, list(htmltools::tags$li(htmltools::a(
-      "Processed app bundle",
-      href = bundle_url,
-      target = "_blank",
-      rel = "noopener noreferrer"
-    ))))
+    links <- c(
+      links,
+      list(htmltools::tags$li(htmltools::a(
+        "Processed app bundle",
+        href = bundle_url,
+        target = "_blank",
+        rel = "noopener noreferrer"
+      )))
+    )
   }
   if (!is.na(data_url)) {
-    links <- c(links, list(htmltools::tags$li(htmltools::a(
-      "Public data repository",
-      href = data_url,
-      target = "_blank",
-      rel = "noopener noreferrer"
-    ))))
+    links <- c(
+      links,
+      list(htmltools::tags$li(htmltools::a(
+        "Public data repository",
+        href = data_url,
+        target = "_blank",
+        rel = "noopener noreferrer"
+      )))
+    )
   }
   if (!is.na(code_url)) {
-    links <- c(links, list(htmltools::tags$li(htmltools::a(
-      "Application source code",
-      href = code_url,
-      target = "_blank",
-      rel = "noopener noreferrer"
-    ))))
+    links <- c(
+      links,
+      list(htmltools::tags$li(htmltools::a(
+        "Application source code",
+        href = code_url,
+        target = "_blank",
+        rel = "noopener noreferrer"
+      )))
+    )
   }
   if (!is.na(doi)) {
     doi_url <- if (grepl("^10[.][0-9]{4,9}/[^[:space:]]+$", doi)) {
@@ -135,12 +162,15 @@ data_links_ui <- function(bundle) {
       https_url(doi)
     }
     if (!is.na(doi_url)) {
-      links <- c(links, list(htmltools::tags$li(htmltools::a(
-        "Manuscript",
-        href = doi_url,
-        target = "_blank",
-        rel = "noopener noreferrer"
-      ))))
+      links <- c(
+        links,
+        list(htmltools::tags$li(htmltools::a(
+          "Manuscript",
+          href = doi_url,
+          target = "_blank",
+          rel = "noopener noreferrer"
+        )))
+      )
     }
   }
   if (length(links) == 0L) {
@@ -172,7 +202,10 @@ about_server <- function(id, bundle) {
         } else {
           clean_bundle <- bundle
           attributes(clean_bundle) <- attributes(clean_bundle)[
-            setdiff(names(attributes(clean_bundle)), c("bundle_path", "data_manifest"))
+            setdiff(
+              names(attributes(clean_bundle)),
+              c("bundle_path", "data_manifest")
+            )
           ]
           saveRDS(clean_bundle, file, compress = "xz")
         }

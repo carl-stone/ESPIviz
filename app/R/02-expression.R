@@ -18,7 +18,10 @@ normalize_gene_expression <- function(counts, library_size) {
 parse_gene_input <- function(text, universe, max_genes = Inf) {
   universe <- as.character(universe)
   tokens <- unlist(
-    strsplit(paste(as.character(text %||% ""), collapse = "\n"), "[,;[:space:]]+"),
+    strsplit(
+      paste(as.character(text %||% ""), collapse = "\n"),
+      "[,;[:space:]]+"
+    ),
     use.names = FALSE
   )
   tokens <- sub("^[\"']", "", tokens)
@@ -39,7 +42,9 @@ parse_gene_input <- function(text, universe, max_genes = Inf) {
 }
 
 read_gene_upload <- function(upload) {
-  if (is.null(upload) || !file.exists(upload$datapath)) return(character())
+  if (is.null(upload) || !file.exists(upload$datapath)) {
+    return(character())
+  }
   extension <- tolower(tools::file_ext(upload$name %||% ""))
   values <- tryCatch(
     {
@@ -99,6 +104,12 @@ match_bundle_genes <- function(bundle, genes) {
 }
 
 expression_matrix <- function(bundle, genes, cell_ids = NULL) {
+  if (!requireNamespace("Matrix", quietly = TRUE)) {
+    stop(
+      "The Matrix package is required for sparse expression lookup.",
+      call. = FALSE
+    )
+  }
   parsed <- match_bundle_genes(bundle, genes)
   if (is.null(cell_ids)) {
     cell_index <- seq_len(nrow(bundle$cells))
@@ -126,9 +137,13 @@ expression_matrix <- function(bundle, genes, cell_ids = NULL) {
 group_expression_summary <- function(expression, counts, groups, group_name) {
   if (nrow(expression) == 0L || ncol(expression) == 0L) {
     empty <- data.frame(
-      gene = character(), group = character(), cell_count = integer(),
-      mean_expression = numeric(), median_expression = numeric(),
-      detected_n = integer(), detected_pct = numeric(),
+      gene = character(),
+      group = character(),
+      cell_count = integer(),
+      mean_expression = numeric(),
+      median_expression = numeric(),
+      detected_n = integer(),
+      detected_pct = numeric(),
       stringsAsFactors = FALSE
     )
     names(empty)[[2L]] <- group_name
@@ -163,14 +178,18 @@ group_expression_summary <- function(expression, counts, groups, group_name) {
 }
 
 summarize_selection <- function(
-    bundle,
-    selected_cell_ids,
-    genes,
-    include_splits = TRUE,
-    chunk_size = 128L) {
+  bundle,
+  selected_cell_ids,
+  genes,
+  include_splits = TRUE,
+  chunk_size = 128L
+) {
   parsed <- match_bundle_genes(bundle, genes)
   all_ids <- as.character(bundle$cells$cell_id)
-  selected_cell_ids <- intersect(all_ids, as.character(selected_cell_ids %||% character()))
+  selected_cell_ids <- intersect(
+    all_ids,
+    as.character(selected_cell_ids %||% character())
+  )
   if (length(selected_cell_ids) == 0L) {
     selected_cell_ids <- all_ids
   }
@@ -201,11 +220,20 @@ summarize_selection <- function(
   by_cluster_chunks <- list()
   if (length(gene_index) > 0L) {
     chunk_size <- max(1L, as.integer(chunk_size))
-    chunks <- split(seq_along(gene_index), ceiling(seq_along(gene_index) / chunk_size))
+    chunks <- split(
+      seq_along(gene_index),
+      ceiling(seq_along(gene_index) / chunk_size)
+    )
     for (chunk_number in seq_along(chunks)) {
       columns <- chunks[[chunk_number]]
-      all_counts <- as.matrix(bundle$counts[, gene_index[columns], drop = FALSE])
-      all_expression <- normalize_gene_expression(all_counts, bundle$cells$library_size)
+      all_counts <- as.matrix(bundle$counts[,
+        gene_index[columns],
+        drop = FALSE
+      ])
+      all_expression <- normalize_gene_expression(
+        all_counts,
+        bundle$cells$library_size
+      )
       colnames(all_counts) <- parsed$genes[columns]
       colnames(all_expression) <- parsed$genes[columns]
 
@@ -261,7 +289,8 @@ summarize_selection <- function(
         )
       }
     }
-    comparison$mean_difference <- comparison$selected_mean - comparison$remaining_mean
+    comparison$mean_difference <- comparison$selected_mean -
+      comparison$remaining_mean
     comparison$mean_ratio <- safe_ratio(
       comparison$selected_mean,
       comparison$remaining_mean
@@ -272,7 +301,6 @@ summarize_selection <- function(
       comparison$selected_detected_pct,
       comparison$remaining_detected_pct
     )
-
   }
 
   if (length(by_condition_chunks) > 0L) {
@@ -317,7 +345,10 @@ selection_summary_export <- function(bundle, selected_cell_ids, genes) {
 selection_expression_export <- function(bundle, selected_cell_ids, genes) {
   parsed <- match_bundle_genes(bundle, genes)
   all_ids <- as.character(bundle$cells$cell_id)
-  selected_cell_ids <- intersect(all_ids, as.character(selected_cell_ids %||% character()))
+  selected_cell_ids <- intersect(
+    all_ids,
+    as.character(selected_cell_ids %||% character())
+  )
   if (length(selected_cell_ids) == 0L) {
     selected_cell_ids <- all_ids
   }
@@ -325,9 +356,14 @@ selection_expression_export <- function(bundle, selected_cell_ids, genes) {
   gene_index <- match(parsed$genes, bundle_gene_names(bundle))
   if (length(gene_index) == 0L || length(cell_index) == 0L) {
     return(data.frame(
-      cell_id = character(), gene = character(), count = numeric(),
-      normalized_expression = numeric(), condition = character(),
-      cluster = character(), Mouse = character(), sample = character(),
+      cell_id = character(),
+      gene = character(),
+      count = numeric(),
+      normalized_expression = numeric(),
+      condition = character(),
+      cluster = character(),
+      Mouse = character(),
+      sample = character(),
       stringsAsFactors = FALSE
     ))
   }
@@ -355,18 +391,26 @@ selection_expression_export <- function(bundle, selected_cell_ids, genes) {
 }
 
 write_selection_expression_export <- function(
-    bundle,
-    selected_cell_ids,
-    genes,
-    file) {
+  bundle,
+  selected_cell_ids,
+  genes,
+  file
+) {
   parsed <- match_bundle_genes(bundle, genes)
   all_ids <- as.character(bundle$cells$cell_id)
-  selected_cell_ids <- intersect(all_ids, as.character(selected_cell_ids %||% character()))
-  if (length(selected_cell_ids) == 0L) selected_cell_ids <- all_ids
+  selected_cell_ids <- intersect(
+    all_ids,
+    as.character(selected_cell_ids %||% character())
+  )
+  if (length(selected_cell_ids) == 0L) {
+    selected_cell_ids <- all_ids
+  }
   cell_index <- match(selected_cell_ids, all_ids)
   gene_index <- match(parsed$genes, bundle_gene_names(bundle))
-  if (length(gene_index) == ncol(bundle$counts) &&
-    setequal(gene_index, seq_len(ncol(bundle$counts)))) {
+  if (
+    length(gene_index) == ncol(bundle$counts) &&
+      setequal(gene_index, seq_len(ncol(bundle$counts)))
+  ) {
     gene_index <- seq_len(ncol(bundle$counts))
     parsed$genes <- bundle_gene_names(bundle)
   }
@@ -382,7 +426,8 @@ write_selection_expression_export <- function(
   }
   if (length(normalized@x) > 0L) {
     normalized@x <- log1p(
-      10000 * normalized@x /
+      10000 *
+        normalized@x /
         bundle$cells$library_size[cell_index][normalized@i + 1L]
     )
   }
