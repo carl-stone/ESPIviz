@@ -58,10 +58,36 @@ app_ui <- function(bundle) {
   )
 }
 
+app_view_label <- function(value) {
+  view_map <- c(
+    explore = "Explore",
+    de = "Differential expression",
+    differential_expression = "Differential expression",
+    pathways = "Pathways",
+    about = "About"
+  )
+  key <- tolower(as.character(value %||% ""))
+  view <- unname(view_map[key])
+  if (length(view) == 0L || is.na(view)) return(NULL)
+  view
+}
+
+app_view_slug <- function(label) {
+  switch(
+    label %||% "Explore",
+    "Differential expression" = "de",
+    "Pathways" = "pathways",
+    "About" = "about",
+    "explore"
+  )
+}
+
 app_server <- function(bundle) {
   force(bundle)
   function(input, output, session) {
     state <- new_app_state(bundle)
+    url_initialized <- shiny::reactiveVal(FALSE)
+    pending_view <- shiny::reactiveVal(NULL)
     navigate_explore <- function() bslib::nav_select("main_nav", "Explore", session = session)
 
     explore_server("explore", bundle, state)
@@ -71,16 +97,9 @@ app_server <- function(bundle) {
 
     shiny::observeEvent(session$clientData$url_search, {
       query <- shiny::parseQueryString(session$clientData$url_search %||% "")
-      view_map <- c(
-        explore = "Explore",
-        de = "Differential expression",
-        differential_expression = "Differential expression",
-        pathways = "Pathways",
-        about = "About"
-      )
-      view_key <- tolower(query$view %||% "")
-      view <- unname(view_map[view_key])
-      if (length(view) > 0L && !is.na(view)) {
+      view <- app_view_label(query$view)
+      if (!is.null(view)) {
+        pending_view(view)
         bslib::nav_select("main_nav", view, session = session)
       }
       if (!is.null(query$gene)) set_state_gene(state, bundle, query$gene)
@@ -88,16 +107,16 @@ app_server <- function(bundle) {
       if (!is.null(query$pathway) && query$pathway %in% bundle$pathways$pathway_id) {
         state$active_pathway(query$pathway)
       }
+      url_initialized(TRUE)
     }, once = TRUE)
 
     shiny::observe({
-      view_slug <- switch(
-        input$main_nav %||% "Explore",
-        "Differential expression" = "de",
-        "Pathways" = "pathways",
-        "About" = "about",
-        "explore"
-      )
+      shiny::req(url_initialized())
+      current_view <- input$main_nav %||% "Explore"
+      initial_view <- pending_view()
+      if (!is.null(initial_view) && !identical(current_view, initial_view)) return()
+      if (!is.null(initial_view)) pending_view(NULL)
+      view_slug <- app_view_slug(current_view)
       query <- paste0(
         "?view=", utils::URLencode(view_slug, reserved = TRUE),
         "&gene=", utils::URLencode(state$active_gene(), reserved = TRUE)

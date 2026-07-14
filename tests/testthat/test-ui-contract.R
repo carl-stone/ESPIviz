@@ -95,3 +95,17 @@ test_that("About data links render with supported list tags", {
   expect_match(html, "Processed app bundle", fixed = TRUE)
   expect_match(html, "Application source code", fixed = TRUE)
 })
+
+test_that("deep-link view names map without falling back early", {
+  expect_app_helper("app_view_label")
+  expect_app_helper("app_view_slug")
+
+  expect_identical(app_view_label("de"), "Differential expression")
+  expect_identical(app_view_label("DIFFERENTIAL_EXPRESSION"), "Differential expression")
+  expect_identical(app_view_label("pathways"), "Pathways")
+  expect_identical(app_view_label("about"), "About")
+  expect_null(app_view_label("unknown"))
+  expect_identical(app_view_slug("Differential expression"), "de")
+  expect_identical(app_view_slug("Pathways"), "pathways")
+  expect_identical(app_view_slug("About"), "about")
+})
