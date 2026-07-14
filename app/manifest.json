@@ -2405,7 +2405,7 @@
       "checksum": "b660bc5ba60e16b7826c60df47cb61bd"
     },
     "R/02-expression.R": {
-      "checksum": "61fb1f7f8f9d717c9e5c223686f25ece"
+      "checksum": "675d26f885dd151e9e627786aef3b808"
     },
     "R/03-state-plots.R": {
       "checksum": "3537df8166df4de89a27332fe14d928c"
@@ -2420,7 +2420,7 @@
       "checksum": "f0c8714968f9555276d31b4cbf9f4bda"
     },
     "R/40-about.R": {
-      "checksum": "5ae3f8a452d3fac1752c84ea6fbf0458"
+      "checksum": "4bf4b95283ae7b6734f6b97fbb797a9b"
     },
     "R/90-app-shell.R": {
       "checksum": "b91e7c90b0cb72e8347563aa9eaa1d03"

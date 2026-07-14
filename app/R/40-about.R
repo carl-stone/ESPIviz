@@ -102,6 +102,7 @@ data_links_ui <- function(bundle) {
   bundle_url <- published_bundle_url(bundle)
   data_url <- https_url(provenance_value(provenance, c("data_url", "data_repository_url")))
   code_url <- https_url(provenance_value(provenance, c("code_url", "application_code_url")))
+  if (is.na(code_url)) code_url <- "https://github.com/carl-stone/ESPIviz"
   doi <- provenance_value(provenance, c("manuscript_doi", "doi"))
   if (!is.na(bundle_url)) {
     links <- c(links, list(htmltools::tags$li(htmltools::a(

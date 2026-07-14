@@ -93,4 +93,5 @@ test_that("About data links render with supported list tags", {
   expect_match(html, "<ul", fixed = TRUE)
   expect_match(html, "<li>", fixed = TRUE)
   expect_match(html, "Processed app bundle", fixed = TRUE)
+  expect_match(html, "Application source code", fixed = TRUE)
 })
