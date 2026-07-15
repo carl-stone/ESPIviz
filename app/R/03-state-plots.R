@@ -360,7 +360,10 @@ make_umap_plotly <- function(
     )
     plot <- plotly::colorbar(
       plot,
-      title = paste(genes[[1L]], "log normalized expression"),
+      title = list(
+        text = paste(genes[[1L]], "log normalized expression"),
+        side = "right"
+      ),
       limits = c(-color_limit, color_limit)
     )
   } else {
@@ -734,6 +737,7 @@ summary_violin_plot_height <- function(gene_count) {
 
 make_summary_violin_plot <- function(
   data,
+  bundle = NULL,
   group_by,
   group_label,
   rotate_x = FALSE
@@ -744,8 +748,14 @@ make_summary_violin_plot <- function(
   }
   gene_count <- length(unique(as.character(data$gene)))
   groups <- levels(droplevels(data$group))
-  palette <- grDevices::hcl.colors(max(3L, length(groups)), "Dark 3")
-  palette <- stats::setNames(palette[seq_along(groups)], groups)
+  palette <- if (
+    !is.null(bundle) && group_by %in% c("condition", "cluster")
+  ) {
+    discrete_palette(bundle, group_by, groups)
+  } else {
+    fallback <- grDevices::hcl.colors(max(3L, length(groups)), "Dark 3")
+    stats::setNames(fallback[seq_along(groups)], groups)
+  }
   density_group <- interaction(data$gene, data$group, drop = TRUE)
   density_n <- ave(
     rep.int(1L, nrow(data)),

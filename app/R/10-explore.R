@@ -871,6 +871,7 @@ explore_server <- function(id, bundle, state) {
       }
       make_summary_violin_plot(
         page_violin_data(),
+        bundle = bundle,
         group_by = group_by,
         group_label = group_label,
         rotate_x = rotate_x

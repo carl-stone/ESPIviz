@@ -154,6 +154,34 @@ top_pathway_results <- function(pathways, n_per_direction = 10L) {
   ]
 }
 
+displayed_pathway_results <- function(
+  pathways,
+  active_pathway,
+  n_per_direction = 10L
+) {
+  displayed <- top_pathway_results(pathways, n_per_direction)
+  active_pathway <- as.character(active_pathway %||% character())
+  active_pathway <- active_pathway[
+    !is.na(active_pathway) & nzchar(active_pathway)
+  ]
+  if (
+    length(active_pathway) == 0L ||
+      active_pathway[[1L]] %in% as.character(displayed$pathway_id)
+  ) {
+    return(displayed)
+  }
+
+  active_index <- match(
+    active_pathway[[1L]],
+    as.character(pathways$pathway_id)
+  )
+  if (is.na(active_index)) {
+    return(displayed)
+  }
+
+  rbind(displayed, pathways[active_index, , drop = FALSE])
+}
+
 pathway_direction_palette <- function() {
   c("Control" = "#2166AC", "E-Stim" = "#B52865")
 }
@@ -500,7 +528,8 @@ pathways_ui <- function(id) {
           class = "small text-body-secondary px-3 pb-3 mb-0",
           paste(
             "Each method shows the 10 terms with the lowest adjusted P",
-            "values in each direction.",
+            "values in each direction; a selected term outside that set is",
+            "added to the plot.",
             "GSEA uses NES (neutral = 0); ORA uses fold enrichment",
             "(neutral = 1). Color and shape mark direction; point size",
             "marks adjusted-P strength, and an outline marks the selected",
@@ -568,7 +597,12 @@ pathways_ui <- function(id) {
 pathways_server <- function(id, bundle, state, navigate_explore) {
   shiny::moduleServer(id, function(input, output, session) {
     source_id <- session$ns("pathway_source")
-    plotted_pathways <- top_pathway_results(bundle$pathways)
+    plotted_pathways <- shiny::reactive({
+      displayed_pathway_results(
+        bundle$pathways,
+        state$active_pathway()
+      )
+    })
     pathway_choices <- stats::setNames(
       as.character(bundle$pathways$pathway_id),
       paste0(
@@ -604,7 +638,11 @@ pathways_server <- function(id, bundle, state, navigate_explore) {
     )
 
     output$pathway_plot <- plotly::renderPlotly({
-      make_pathway_plotly(plotted_pathways, state$active_pathway(), source_id)
+      make_pathway_plotly(
+        plotted_pathways(),
+        state$active_pathway(),
+        source_id
+      )
     })
     shiny::outputOptions(output, "pathway_plot", suspendWhenHidden = FALSE)
 
@@ -708,7 +746,10 @@ pathways_server <- function(id, bundle, state, navigate_explore) {
       content = function(file) {
         ggplot2::ggsave(
           file,
-          plot = make_pathway_ggplot(plotted_pathways, state$active_pathway()),
+          plot = make_pathway_ggplot(
+            plotted_pathways(),
+            state$active_pathway()
+          ),
           width = 9,
           height = 11,
           dpi = 320,
@@ -722,7 +763,10 @@ pathways_server <- function(id, bundle, state, navigate_explore) {
       content = function(file) {
         ggplot2::ggsave(
           file,
-          plot = make_pathway_ggplot(plotted_pathways, state$active_pathway()),
+          plot = make_pathway_ggplot(
+            plotted_pathways(),
+            state$active_pathway()
+          ),
           device = grDevices::cairo_pdf,
           width = 9,
           height = 11,

@@ -76,6 +76,32 @@ test_that("summary violin plots build for all four expression groupings", {
   }
 })
 
+test_that("summary violins reuse configured condition and cluster colors", {
+  expect_app_helper("make_summary_violin_plot")
+  bundle <- synthetic_bundle()
+  bundle$palette$cluster <- stats::setNames(
+    c("#A11D1D", "#1D6FA1", "#268A45"),
+    c("0", "1", "2")
+  )
+  data <- prepare_summary_violin_data(bundle, "Glul")
+
+  for (group_by in c("condition", "cluster")) {
+    plot <- make_summary_violin_plot(
+      data,
+      bundle = bundle,
+      group_by = group_by,
+      group_label = group_by
+    )
+    groups <- levels(summary_violin_plot_data(data, group_by)$group)
+    fill_scale <- plot$scales$get_scales("fill")
+
+    expect_equal(
+      unname(fill_scale$palette(length(groups))),
+      unname(discrete_palette(bundle, group_by, groups))
+    )
+  }
+})
+
 test_that("comparison dot-plot data exposes expression and detection by group", {
   expect_app_helper("comparison_plot_data")
   bundle <- synthetic_bundle()
@@ -217,9 +243,10 @@ test_that("interactive PFlog UMAP uses a zero-centered colorbar", {
   )
   expect_length(color_traces, 1L)
   expect_identical(
-    color_traces[[1L]]$marker$colorbar$title,
+    color_traces[[1L]]$marker$colorbar$title$text,
     "Glul log normalized expression"
   )
+  expect_identical(color_traces[[1L]]$marker$colorbar$title$side, "right")
   expect_equal(color_traces[[1L]]$marker$cmin, -limit, tolerance = 1e-12)
   expect_equal(color_traces[[1L]]$marker$cmax, limit, tolerance = 1e-12)
   expect_equal(

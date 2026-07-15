@@ -36,6 +36,17 @@ test_that("secondary full-width panels span their plotting grids", {
   expect_match(about_html, 'col-widths-sm="7,5,12"', fixed = TRUE)
 })
 
+test_that("About describes the complete enrichment browser", {
+  html <- htmltools::renderTags(about_ui("about_test"))$html
+
+  expect_match(
+    html,
+    "complete Gene Ontology Biological Process enrichment results",
+    fixed = TRUE
+  )
+  expect_no_match(html, "featured manuscript-aligned gene sets", fixed = TRUE)
+})
+
 test_that("differential-expression table has a meaningful result heading", {
   html <- htmltools::renderTags(
     differential_expression_ui("de_test")
