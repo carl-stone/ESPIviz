@@ -96,6 +96,92 @@ test_that("Explore provides plotted summaries by cluster and condition", {
   expect_match(html, "dot size", fixed = TRUE)
 })
 
+test_that("expression summary plots default to violins with dot plots available", {
+  html <- htmltools::renderTags(
+    explore_ui("explore_test", synthetic_bundle())
+  )$html
+
+  for (id in c(
+    "comparison_plot_type",
+    "sample_plot_type",
+    "condition_plot_type",
+    "cluster_plot_type"
+  )) {
+    select_id <- paste0("explore_test-", id)
+    pattern <- paste0(
+      '(?s)<select[^>]*id="',
+      select_id,
+      '"[^>]*>.*?</select>'
+    )
+    matched <- regmatches(html, regexpr(pattern, html, perl = TRUE))
+
+    expect_length(matched, 1L)
+    expect_match(
+      matched,
+      '<option value="violin" selected>Violin plot</option>',
+      fixed = TRUE
+    )
+    expect_match(
+      matched,
+      '<option value="dot">Dot plot</option>',
+      fixed = TRUE
+    )
+  }
+})
+
+test_that("expression summary plot selectors switch every rendered plot", {
+  bundle <- synthetic_bundle()
+  state <- new_app_state(bundle)
+  plot_ui_ids <- c(
+    "gene_comparison_plot_ui",
+    "sample_summary_plot_ui",
+    "condition_summary_plot_ui",
+    "cluster_summary_plot_ui"
+  )
+  plot_ids <- c(
+    "gene_comparison_plot",
+    "sample_summary_plot",
+    "condition_summary_plot",
+    "cluster_summary_plot"
+  )
+
+  shiny::testServer(
+    explore_server,
+    args = list(bundle = bundle, state = state),
+    {
+      session$flushReact()
+      for (id in plot_ui_ids) {
+        expect_match(
+          htmltools::renderTags(output[[id]])$html,
+          'height:360px;',
+          fixed = TRUE
+        )
+      }
+      for (id in plot_ids) {
+        expect_silent(output[[id]])
+      }
+
+      session$setInputs(
+        comparison_plot_type = "dot",
+        sample_plot_type = "dot",
+        condition_plot_type = "dot",
+        cluster_plot_type = "dot"
+      )
+      session$flushReact()
+      for (id in plot_ui_ids) {
+        expect_match(
+          htmltools::renderTags(output[[id]])$html,
+          'height:300px;',
+          fixed = TRUE
+        )
+      }
+      for (id in plot_ids) {
+        expect_silent(output[[id]])
+      }
+    }
+  )
+})
+
 test_that("Explore exposes replicate-aware visualization panels", {
   html <- htmltools::renderTags(
     explore_ui("explore_test", synthetic_bundle())

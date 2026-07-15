@@ -1,3 +1,81 @@
+test_that("summary violin data preserves expression and selection grouping", {
+  expect_app_helper("prepare_summary_violin_data")
+  expect_app_helper("summary_violin_plot_data")
+  bundle <- synthetic_bundle()
+  selected <- c("cell_1", "cell_3")
+  data <- prepare_summary_violin_data(
+    bundle,
+    c("Glul", "EGFP"),
+    selected
+  )
+
+  expect_equal(nrow(data), 2L * nrow(bundle$cells))
+  expect_equal(sum(data$selected), 2L * length(selected))
+  observed <- data[
+    data$cell_id == "cell_3" & as.character(data$gene) == "Glul",
+    "expression"
+  ]
+  expected <- expression_matrix(bundle, "Glul", "cell_3")[1L, 1L]
+  expect_equal(observed, expected)
+
+  comparison <- summary_violin_plot_data(data, "comparison")
+  expect_setequal(
+    unique(as.character(comparison$group)),
+    c("Selected cells", "Remaining cells")
+  )
+  expect_equal(nrow(comparison), nrow(data))
+
+  by_sample <- summary_violin_plot_data(data, "sample")
+  expect_equal(nrow(by_sample), 2L * length(selected))
+  expect_true(all(by_sample$selected))
+  expect_setequal(
+    as.character(by_sample$cell_id),
+    rep(selected, times = 2L)
+  )
+
+  all_cells <- prepare_summary_violin_data(bundle, "Glul")
+  all_comparison <- summary_violin_plot_data(all_cells, "comparison")
+  expect_identical(unique(as.character(all_comparison$group)), "All cells")
+  expect_equal(
+    nrow(summary_violin_plot_data(all_cells, "condition")),
+    nrow(bundle$cells)
+  )
+})
+
+test_that("summary violin plots build for all four expression groupings", {
+  expect_app_helper("make_summary_violin_plot")
+  bundle <- synthetic_bundle()
+  data <- prepare_summary_violin_data(
+    bundle,
+    c("Glul", "EGFP")
+  )
+  settings <- list(
+    comparison = list(label = NULL, rotate_x = FALSE),
+    sample = list(label = "Biological sample", rotate_x = TRUE),
+    condition = list(label = "Condition", rotate_x = FALSE),
+    cluster = list(label = "Final cluster", rotate_x = FALSE)
+  )
+
+  for (group_by in names(settings)) {
+    setting <- settings[[group_by]]
+    plot <- make_summary_violin_plot(
+      data,
+      group_by = group_by,
+      group_label = setting$label,
+      rotate_x = setting$rotate_x
+    )
+
+    expect_s3_class(plot, "ggplot")
+    expect_true(any(vapply(
+      plot$layers,
+      function(layer) inherits(layer$geom, "GeomViolin"),
+      logical(1L)
+    )))
+    expect_identical(plot$labels$y, "Log normalized expression")
+    expect_silent(ggplot2::ggplot_build(plot))
+  }
+})
+
 test_that("comparison dot-plot data exposes expression and detection by group", {
   expect_app_helper("comparison_plot_data")
   bundle <- synthetic_bundle()
