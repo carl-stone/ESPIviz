@@ -556,6 +556,22 @@ espiviz_map_entrez_symbols <- function(entrez_ids) {
   unname(mapped[match(entrez_ids, names(mapped))])
 }
 
+espiviz_map_go_ontology <- function(go_ids) {
+  espiviz_require("AnnotationDbi")
+  espiviz_require("GO.db")
+  database <- getExportedValue("GO.db", "GO.db")
+  mapped <- suppressMessages(
+    AnnotationDbi::mapIds(
+      database,
+      keys = unique(go_ids),
+      keytype = "GOID",
+      column = "ONTOLOGY",
+      multiVals = "first"
+    )
+  )
+  unname(mapped[match(go_ids, names(mapped))])
+}
+
 espiviz_pathway_id <- function(source, result_id) {
   normalized_id <- gsub("[^a-z0-9]+", "_", tolower(result_id))
   normalized_id <- gsub("^_+|_+$", "", normalized_id)
@@ -565,7 +581,8 @@ espiviz_pathway_id <- function(source, result_id) {
 espiviz_read_pathway_results <- function(
   result_paths,
   genes,
-  map_entrez = espiviz_map_entrez_symbols
+  map_entrez = espiviz_map_entrez_symbols,
+  map_ontology = espiviz_map_go_ontology
 ) {
   allowed_sources <- c("gsea", "ora_up", "ora_down")
   if (!all(allowed_sources %in% names(result_paths))) {
@@ -613,6 +630,21 @@ espiviz_read_pathway_results <- function(
   })
   names(result_tables) <- allowed_sources
 
+  go_ids <- unique(unlist(lapply(
+    result_tables,
+    function(data) as.character(data$ID)
+  ), use.names = FALSE))
+  ontologies <- map_ontology(go_ids)
+  if (
+    length(ontologies) != length(go_ids) ||
+      anyNA(ontologies) ||
+      any(as.character(ontologies) != "BP")
+  ) {
+    espiviz_abort(
+      "Every enrichment result must be a Gene Ontology Biological Process term."
+    )
+  }
+
   pathway_rows <- list()
   pathway_gene_rows <- list()
   output_index <- 0L
@@ -628,8 +660,14 @@ espiviz_read_pathway_results <- function(
       )
       all_entrez <- unique(unlist(gene_lists, use.names = FALSE))
       mapped_genes <- map_entrez(all_entrez)
-      if (length(mapped_genes) != length(all_entrez)) {
-        espiviz_abort("The GSEA Entrez-to-symbol mapping is invalid.")
+      if (
+        length(mapped_genes) != length(all_entrez) ||
+          anyNA(mapped_genes) ||
+          any(!nzchar(as.character(mapped_genes)))
+      ) {
+        espiviz_abort(
+          "The exporter must map every GSEA Entrez ID to one gene symbol."
+        )
       }
       names(mapped_genes) <- all_entrez
       gene_lists <- lapply(gene_lists, function(entrez) {
@@ -687,7 +725,12 @@ espiviz_read_pathway_results <- function(
       pathway_genes <- pathway_genes[
         !is.na(pathway_genes) & pathway_genes %in% genes
       ]
-      if (length(pathway_genes) == 0L) next
+      if (length(pathway_genes) == 0L) {
+        espiviz_abort(
+          "Enrichment result '%s' has no genes in the source object.",
+          source_table$ID[[index]]
+        )
+      }
       output_index <- output_index + 1L
       pathway_gene_rows[[output_index]] <- data.frame(
         pathway_id = unname(source_ids[[index]]),

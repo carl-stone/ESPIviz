@@ -170,6 +170,9 @@ test_that("exporter includes every GSEA and ORA enrichment result", {
     genes = c("Glul", "Other", "Mcm2"),
     map_entrez = function(ids) {
       unname(c("1" = "Glul", "2" = "Other", "3" = "Mcm2")[ids])
+    },
+    map_ontology = function(ids) {
+      rep("BP", length(ids))
     }
   )
 
@@ -183,6 +186,40 @@ test_that("exporter includes every GSEA and ORA enrichment result", {
     c("E-Stim", "Control")
   )
   expect_setequal(observed$pathway_genes$gene, c("Glul", "Other", "Mcm2"))
+
+  expect_error(
+    espiviz_read_pathway_results(
+      result_paths = paths,
+      genes = c("Glul", "Other", "Mcm2"),
+      map_entrez = function(ids) {
+        mapped <- unname(c(
+          "1" = "Glul",
+          "2" = "Other",
+          "3" = "Mcm2"
+        )[ids])
+        mapped[[1L]] <- NA_character_
+        mapped
+      },
+      map_ontology = function(ids) rep("BP", length(ids))
+    ),
+    "every GSEA Entrez ID",
+    fixed = TRUE
+  )
+
+  expect_error(
+    espiviz_read_pathway_results(
+      result_paths = paths,
+      genes = c("Glul", "Other", "Mcm2"),
+      map_entrez = function(ids) {
+        unname(c("1" = "Glul", "2" = "Other", "3" = "Mcm2")[ids])
+      },
+      map_ontology = function(ids) {
+        c("BP", rep("MF", length(ids) - 1L))
+      }
+    ),
+    "Biological Process",
+    fixed = TRUE
+  )
 })
 
 test_that("exporter rejects source content that does not match its declared hash", {
