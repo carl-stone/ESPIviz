@@ -15,6 +15,25 @@ explore_ui <- function(id, bundle) {
         choices = NULL,
         options = list(placeholder = "Search 38,394 genes")
       ),
+      shiny::selectizeInput(
+        ns("secondary_gene"),
+        "Second plot gene (optional)",
+        choices = NULL,
+        selected = NULL,
+        options = list(
+          placeholder = "Add a gene for blend and scatter",
+          allowEmptyOption = TRUE,
+          create = FALSE
+        )
+      ),
+      htmltools::p(
+        paste(
+          "Current gene is always the first plot gene.",
+          "The optional second gene affects plots only; it does not change",
+          "the current gene or gene set."
+        ),
+        class = "sidebar-help"
+      ),
       shiny::selectInput(
         ns("color_by"),
         "Color UMAP by",
@@ -115,60 +134,79 @@ explore_ui <- function(id, bundle) {
           )
         )
       ),
-      bslib::card(
-        class = "selection-card",
-        bslib::card_header("Current selection"),
-        shiny::uiOutput(ns("selection_overview")),
-        htmltools::div(
-          class = "selection-instruction",
-          "Click a cell or use box or lasso from the plot toolbar."
-        ),
-        htmltools::hr(),
-        htmltools::h3("Select cells by cluster", class = "card-section-title"),
-        shiny::selectInput(
-          ns("select_cluster"),
-          label = NULL,
-          choices = c(
-            "Choose cluster" = "",
-            stats::setNames(cluster_choices, paste("Cluster", cluster_choices))
+      htmltools::div(
+        class = "umap-side-rail",
+        bslib::card(
+          class = "selection-card selection-card-compact",
+          bslib::card_header("Current selection"),
+          shiny::uiOutput(ns("selection_overview")),
+          htmltools::div(
+            class = "selection-instruction",
+            "Click a cell or use box or lasso on the UMAP."
+          ),
+          htmltools::h3(
+            "Select cells by cluster",
+            class = "card-section-title"
+          ),
+          shiny::selectInput(
+            ns("select_cluster"),
+            label = NULL,
+            choices = c(
+              "Choose cluster" = "",
+              stats::setNames(
+                cluster_choices,
+                paste("Cluster", cluster_choices)
+              )
+            )
+          ),
+          shiny::actionButton(
+            ns("select_cluster_cells"),
+            "Select cluster",
+            class = "btn-primary w-100"
           )
         ),
-        shiny::actionButton(
-          ns("select_cluster_cells"),
-          "Select cluster",
-          class = "btn-primary w-100"
+        bslib::card(
+          class = "selection-summary-card",
+          bslib::card_header("Selected-cell summary"),
+          shiny::uiOutput(ns("selection_snapshot")),
+          shiny::uiOutput(ns("umap_legend"))
         ),
-        htmltools::hr(),
-        htmltools::h3("Downloads", class = "card-section-title"),
-        shiny::downloadButton(
-          ns("download_umap_png"),
-          "UMAP PNG",
-          class = "btn-outline-primary btn-sm"
-        ),
-        shiny::downloadButton(
-          ns("download_umap_pdf"),
-          "UMAP PDF",
-          class = "btn-outline-primary btn-sm"
-        ),
-        shiny::downloadButton(
-          ns("download_gene_set"),
-          "Gene set",
-          class = "btn-outline-primary btn-sm"
-        ),
-        shiny::downloadButton(
-          ns("download_summary"),
-          "Selection summary",
-          class = "btn-outline-primary btn-sm"
-        ),
-        shiny::downloadButton(
-          ns("download_expression"),
-          "Cell expression",
-          class = "btn-outline-primary btn-sm"
-        ),
-        shiny::downloadButton(
-          ns("download_metadata"),
-          "Cell metadata",
-          class = "btn-outline-primary btn-sm"
+        bslib::card(
+          class = "selection-download-card",
+          bslib::card_header("Downloads"),
+          htmltools::div(
+            class = "download-stack compact-downloads",
+            shiny::downloadButton(
+              ns("download_umap_png"),
+              "UMAP PNG",
+              class = "btn-outline-primary btn-sm"
+            ),
+            shiny::downloadButton(
+              ns("download_umap_pdf"),
+              "UMAP PDF",
+              class = "btn-outline-primary btn-sm"
+            ),
+            shiny::downloadButton(
+              ns("download_gene_set"),
+              "Gene set",
+              class = "btn-outline-primary btn-sm"
+            ),
+            shiny::downloadButton(
+              ns("download_summary"),
+              "Selection summary",
+              class = "btn-outline-primary btn-sm"
+            ),
+            shiny::downloadButton(
+              ns("download_expression"),
+              "Cell expression",
+              class = "btn-outline-primary btn-sm"
+            ),
+            shiny::downloadButton(
+              ns("download_metadata"),
+              "Cell metadata",
+              class = "btn-outline-primary btn-sm"
+            )
+          )
         )
       ),
       bslib::card(
@@ -199,6 +237,38 @@ explore_ui <- function(id, bundle) {
               shiny::uiOutput(ns("gene_comparison_plot_ui"))
             ),
             DT::DTOutput(ns("comparison_table"))
+          ),
+          bslib::nav_panel(
+            "Cell-level",
+            htmltools::h3(
+              "PFlog distribution by final cluster",
+              class = "result-title"
+            ),
+            htmltools::p(
+              paste(
+                "Violins show the current gene and optional second plot gene",
+                "across final clusters. PFlog is centered and can be negative;",
+                "outlined points mark explicitly selected cells."
+              ),
+              class = "supporting-copy"
+            ),
+            shiny::uiOutput(ns("violin_plot_ui")),
+            htmltools::hr(class = "result-divider"),
+            htmltools::h3(
+              "Two-gene PFlog scatter",
+              class = "result-title"
+            ),
+            htmltools::p(
+              paste(
+                "Each point is a cell detected by raw count for at least one gene;",
+                "color identifies its final cluster.",
+                "Larger outlined diamonds are explicitly selected cells.",
+                "Choose a second plot gene in the sidebar to compare two genes;",
+                "hover text reports PFlog and raw-count detection."
+              ),
+              class = "supporting-copy"
+            ),
+            shiny::uiOutput(ns("gene_pair_plot_ui"))
           ),
           bslib::nav_panel(
             "By sample",
@@ -318,11 +388,11 @@ summary_datatable <- function(data, page_length = 25L) {
     selected_median = "Selected median PFlog",
     selected_detected_n = "Selected detected cells",
     selected_detected_pct = "Selected detected (%)",
-    remaining_mean = "Remaining mean PFlog",
+    remaining_mean = "Other cells mean PFlog",
     remaining_median = "Remaining median PFlog",
     remaining_detected_n = "Remaining detected cells",
-    remaining_detected_pct = "Remaining detected (%)",
-    mean_difference = "Mean PFlog difference",
+    remaining_detected_pct = "Other cells detected (%)",
+    mean_difference = "Mean difference",
     detection_pp_difference = "Detection difference (pp)",
     detection_ratio = "Detection ratio",
     mean_expression = "Mean PFlog",
@@ -376,6 +446,7 @@ explore_server <- function(id, bundle, state) {
     ns <- session$ns
     universe <- bundle_gene_names(bundle)
     source_id <- ns("umap_source")
+    pair_source_id <- ns("gene_pair_source")
     input_message <- shiny::reactiveVal(NULL)
     analysis_genes <- state_analysis_genes(state)
     composition_data <- prepare_cluster_composition(bundle)
@@ -406,6 +477,63 @@ explore_server <- function(id, bundle, state) {
       },
       ignoreInit = TRUE
     )
+
+    shiny::observe({
+      shiny::updateSelectizeInput(
+        session,
+        "secondary_gene",
+        choices = c(
+          "No second gene" = "",
+          stats::setNames(universe, universe)
+        ),
+        selected = "",
+        server = TRUE
+      )
+    })
+
+    shiny::observeEvent(
+      state$active_gene(),
+      {
+        current <- compact_character(input$secondary_gene %||% "")
+        if (
+          length(current) > 0L &&
+            casefold_key(current[[1L]]) == casefold_key(state$active_gene())
+        ) {
+          shiny::updateSelectizeInput(
+            session,
+            "secondary_gene",
+            choices = c(
+              "No second gene" = "",
+              stats::setNames(universe, universe)
+            ),
+            selected = "",
+            server = TRUE
+          )
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    plot_genes <- shiny::reactive({
+      second <- parse_gene_input(
+        input$secondary_gene %||% "",
+        universe,
+        max_genes = 1L
+      )$genes
+      normalize_plot_genes(
+        bundle,
+        c(state$active_gene(), second),
+        state$active_gene()
+      )
+    })
+
+    plot_gene_data <- shiny::reactive({
+      prepare_plot_gene_data(
+        bundle,
+        plot_genes(),
+        state$selected_cells()
+      )
+    })
 
     add_text_genes <- function(text) {
       parsed <- append_state_gene_set(state, bundle, text)
@@ -500,20 +628,36 @@ explore_server <- function(id, bundle, state) {
     output$umap_title <- shiny::renderUI({
       label <- switch(
         input$color_by %||% "expression",
-        expression = state$active_gene(),
+        expression = if (length(plot_genes()) == 2L) {
+          paste(plot_genes(), collapse = " + ") |>
+            paste("blend")
+        } else {
+          plot_genes()[[1L]]
+        },
         cluster = "Final cluster",
         condition = "Condition"
       )
       htmltools::span(label, class = "figure-subtitle")
     })
 
+    output$umap_legend <- shiny::renderUI({
+      if (
+        !identical(input$color_by %||% "expression", "expression") ||
+          length(plot_genes()) != 2L
+      ) {
+        return(NULL)
+      }
+      blend_legend_ui(plot_genes())
+    })
+
     output$umap <- plotly::renderPlotly({
       make_umap_plotly(
         bundle = bundle,
         color_by = input$color_by %||% "expression",
-        gene = state$active_gene(),
+        gene = plot_genes(),
         selected_cell_ids = state$selected_cells(),
-        source = source_id
+        source = source_id,
+        gene_data = plot_gene_data()
       )
     })
 
@@ -581,6 +725,10 @@ explore_server <- function(id, bundle, state) {
           }
         )
       )
+    })
+
+    output$selection_snapshot <- shiny::renderUI({
+      selection_snapshot_ui(prepare_selection_snapshot(plot_gene_data()))
     })
 
     page_info <- shiny::reactive({
@@ -667,7 +815,84 @@ explore_server <- function(id, bundle, state) {
     )
 
     output$comparison_table <- DT::renderDT({
-      summary_datatable(page_comparison(), page_length = 25L)
+      concise <- prepare_comparison_table(
+        page_comparison(),
+        explicit_selection = length(state$selected_cells()) > 0L
+      )
+      summary_datatable(concise, page_length = 25L)
+    })
+
+    violin_height <- shiny::reactive({
+      if (length(plot_genes()) == 2L) 650L else 430L
+    })
+
+    output$violin_plot_ui <- shiny::renderUI({
+      htmltools::div(
+        role = "region",
+        `aria-label` = paste(
+          "PFlog distribution violin plot for",
+          paste(plot_genes(), collapse = " and "),
+          "by final cluster"
+        ),
+        shiny::plotOutput(
+          ns("violin_plot"),
+          height = paste0(violin_height(), "px")
+        )
+      )
+    })
+
+    output$violin_plot <- shiny::renderPlot(
+      make_violin_plot(plot_gene_data(), bundle),
+      height = function() violin_height(),
+      alt = function() {
+        paste(
+          "Violin plot of PFlog expression for",
+          paste(plot_genes(), collapse = " and "),
+          "across final clusters. PFlog is centered and can be negative.",
+          "Outlined points mark explicitly selected cells; detection is based",
+          "on raw counts and is reported in the selected-cell summary."
+        )
+      }
+    )
+
+    output$gene_pair_plot_ui <- shiny::renderUI({
+      if (length(plot_genes()) != 2L) {
+        return(htmltools::div(
+          class = "plot-empty",
+          role = "status",
+          "Choose a second plot gene in the sidebar to show the per-cell scatter."
+        ))
+      }
+      gene_data <- plot_gene_data()
+      scope <- gene_pair_scope(gene_data)
+      if (scope$included_n == 0L) {
+        return(htmltools::div(
+          class = "plot-empty",
+          role = "status",
+          "Neither gene is detected by raw count in any cell."
+        ))
+      }
+      htmltools::div(
+        role = "region",
+        `aria-label` = paste(
+          "Per-cell PFlog scatter comparing",
+          plot_genes()[[1L]],
+          "and",
+          plot_genes()[[2L]],
+          "colored by final cluster for cells detected for at least one gene"
+        ),
+        gene_pair_scope_ui(scope),
+        plotly::plotlyOutput(ns("gene_pair_plot"), height = "540px")
+      )
+    })
+
+    output$gene_pair_plot <- plotly::renderPlotly({
+      shiny::req(length(plot_genes()) == 2L)
+      make_gene_pair_plotly(
+        plot_gene_data(),
+        bundle,
+        source = pair_source_id
+      )
     })
 
     condition_page_summary <- shiny::reactive({
@@ -893,7 +1118,11 @@ explore_server <- function(id, bundle, state) {
 
     output$download_umap_png <- shiny::downloadHandler(
       filename = function() {
-        paste0("espiviz-umap-", safe_filename(state$active_gene()), ".png")
+        paste0(
+          "espiviz-umap-",
+          safe_filename(paste(plot_genes(), collapse = "-")),
+          ".png"
+        )
       },
       content = function(file) {
         ggplot2::ggsave(
@@ -901,8 +1130,9 @@ explore_server <- function(id, bundle, state) {
           plot = make_umap_ggplot(
             bundle,
             input$color_by %||% "expression",
-            state$active_gene(),
-            state$selected_cells()
+            plot_genes(),
+            state$selected_cells(),
+            gene_data = plot_gene_data()
           ),
           width = 8.5,
           height = 7,
@@ -914,7 +1144,11 @@ explore_server <- function(id, bundle, state) {
 
     output$download_umap_pdf <- shiny::downloadHandler(
       filename = function() {
-        paste0("espiviz-umap-", safe_filename(state$active_gene()), ".pdf")
+        paste0(
+          "espiviz-umap-",
+          safe_filename(paste(plot_genes(), collapse = "-")),
+          ".pdf"
+        )
       },
       content = function(file) {
         ggplot2::ggsave(
@@ -922,8 +1156,9 @@ explore_server <- function(id, bundle, state) {
           plot = make_umap_ggplot(
             bundle,
             input$color_by %||% "expression",
-            state$active_gene(),
-            state$selected_cells()
+            plot_genes(),
+            state$selected_cells(),
+            gene_data = plot_gene_data()
           ),
           device = grDevices::cairo_pdf,
           width = 8.5,

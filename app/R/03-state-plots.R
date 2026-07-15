@@ -233,9 +233,19 @@ make_umap_plotly <- function(
   color_by,
   gene,
   selected_cell_ids,
-  source
+  source,
+  gene_data = NULL
 ) {
-  data <- umap_plot_data(bundle, color_by, gene)
+  genes <- normalize_plot_genes(bundle, gene, default_active_gene(bundle))
+  blend_mode <- identical(color_by, "expression") && length(genes) == 2L
+  if (blend_mode) {
+    if (is.null(gene_data)) {
+      gene_data <- prepare_plot_gene_data(bundle, genes, selected_cell_ids)
+    }
+    data <- prepare_umap_blend_data(gene_data)
+  } else {
+    data <- umap_plot_data(bundle, color_by, genes[[1L]])
+  }
   point_style <- umap_point_style(nrow(data))
   hover <- paste0(
     "Cell: ",
@@ -245,12 +255,48 @@ make_umap_plotly <- function(
     "<br>Condition: ",
     data$condition
   )
-  if (identical(color_by, "expression")) {
+  if (blend_mode) {
+    hover <- paste0(
+      hover,
+      "<br>",
+      genes[[1L]],
+      " PFlog: ",
+      formatC(data$expression_1, digits = 4L, format = "fg"),
+      " (Raw detected: ",
+      ifelse(data$detected_1, "yes", "no"),
+      ")<br>",
+      genes[[2L]],
+      " PFlog: ",
+      formatC(data$expression_2, digits = 4L, format = "fg"),
+      " (Raw detected: ",
+      ifelse(data$detected_2, "yes", "no"),
+      ")"
+    )
+    plot <- plotly::plot_ly(
+      data = data,
+      x = ~umap_1,
+      y = ~umap_2,
+      key = ~cell_id,
+      text = hover,
+      hoverinfo = "text",
+      type = "scattergl",
+      mode = "markers",
+      marker = list(
+        size = point_style$interactive_size,
+        opacity = point_style$interactive_opacity,
+        color = data$blend_color,
+        showscale = FALSE,
+        line = list(width = 0)
+      ),
+      source = source,
+      showlegend = FALSE
+    )
+  } else if (identical(color_by, "expression")) {
     color_limit <- expression_color_limit(data$color_value)
     hover <- paste0(
       hover,
       "<br>",
-      gene,
+      genes[[1L]],
       " PFlog: ",
       formatC(data$color_value, digits = 4L, format = "fg")
     )
@@ -278,7 +324,7 @@ make_umap_plotly <- function(
     )
     plot <- plotly::colorbar(
       plot,
-      title = paste(gene, "PFlog"),
+      title = paste(genes[[1L]], "PFlog"),
       limits = c(-color_limit, color_limit)
     )
   } else {
@@ -378,7 +424,10 @@ make_umap_plotly <- function(
       "hoverCompareCartesian"
     ),
     toImageButtonOptions = list(
-      filename = paste0("espiviz-umap-", safe_filename(gene))
+      filename = paste0(
+        "espiviz-umap-",
+        safe_filename(paste(genes, collapse = "-"))
+      )
     )
   )
   plot <- plotly::event_register(plot, "plotly_selected")
@@ -386,11 +435,43 @@ make_umap_plotly <- function(
   plotly::event_register(plot, "plotly_deselect")
 }
 
-make_umap_ggplot <- function(bundle, color_by, gene, selected_cell_ids) {
-  data <- umap_plot_data(bundle, color_by, gene)
+make_umap_ggplot <- function(
+  bundle,
+  color_by,
+  gene,
+  selected_cell_ids,
+  gene_data = NULL
+) {
+  genes <- normalize_plot_genes(bundle, gene, default_active_gene(bundle))
+  blend_mode <- identical(color_by, "expression") && length(genes) == 2L
+  if (blend_mode) {
+    if (is.null(gene_data)) {
+      gene_data <- prepare_plot_gene_data(bundle, genes, selected_cell_ids)
+    }
+    data <- prepare_umap_blend_data(gene_data)
+  } else {
+    data <- umap_plot_data(bundle, color_by, genes[[1L]])
+  }
   point_style <- umap_point_style(nrow(data))
   plot <- ggplot2::ggplot(data, ggplot2::aes(x = umap_1, y = umap_2))
-  if (identical(color_by, "expression")) {
+  caption <- NULL
+  if (blend_mode) {
+    plot <- plot +
+      ggplot2::geom_point(
+        ggplot2::aes(color = blend_color),
+        size = point_style$static_size,
+        alpha = point_style$static_opacity
+      ) +
+      ggplot2::scale_color_identity()
+    caption <- paste0(
+      "Blend legend — gray: Neither detected; orange: ",
+      genes[[1L]],
+      " detected; blue: ",
+      genes[[2L]],
+      " detected; purple: Both detected",
+      ". Detection uses raw counts."
+    )
+  } else if (identical(color_by, "expression")) {
     colors <- expression_palette(bundle)
     color_limit <- expression_color_limit(data$color_value)
     middle_color <- colors[[ceiling(length(colors) / 2)]]
@@ -406,7 +487,7 @@ make_umap_ggplot <- function(bundle, color_by, gene, selected_cell_ids) {
         high = colors[[length(colors)]],
         midpoint = 0,
         limits = c(-color_limit, color_limit),
-        name = paste(gene, "PFlog")
+        name = paste(genes[[1L]], "PFlog")
       )
   } else {
     palette <- discrete_palette(bundle, color_by, data$color_value)
@@ -451,11 +532,11 @@ make_umap_ggplot <- function(bundle, color_by, gene, selected_cell_ids) {
   }
   plot +
     ggplot2::coord_equal() +
-    ggplot2::labs(x = "UMAP 1", y = "UMAP 2") +
+    ggplot2::labs(x = "UMAP 1", y = "UMAP 2", caption = caption) +
     ggplot2::theme_minimal(base_family = "sans", base_size = 11) +
     ggplot2::theme(
       panel.grid = ggplot2::element_blank(),
-      legend.position = if (identical(color_by, "cluster")) {
+      legend.position = if (identical(color_by, "cluster") || blend_mode) {
         "none"
       } else {
         "bottom"

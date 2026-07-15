@@ -83,7 +83,10 @@ about_ui <- function(id) {
                 "Expression uses scclrR PFlog with target = 'auto':",
                 "log1p(4 × alpha × count) is centered by the mean shifted",
                 "log count across all genes in each cell. Values can be",
-                "negative after centering; detection remains count > 0."
+                "negative after centering; detection remains count > 0.",
+                "In the two-gene UMAP blend, raw counts define detection and",
+                "color intensity reflects within-gene PFlog strength among",
+                "detected cells."
               )
             )
           ),

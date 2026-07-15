@@ -421,12 +421,14 @@ pathways_ui <- function(id) {
     htmltools::div(
       class = "page-heading",
       htmltools::div(
-        htmltools::p("Manuscript-aligned terms", class = "eyebrow"),
+        htmltools::p("Curated manuscript terms", class = "eyebrow"),
         htmltools::h1("Pathways"),
         htmltools::p(
           paste(
-            "Directional GSEA and ORA results from the primary condition",
-            "analysis, shown on method-specific score scales."
+            "Featured directional GSEA and ORA results from the primary",
+            "condition analysis, shown on method-specific score scales.",
+            "This manuscript-focused view is not an exhaustive list of",
+            "significant enrichment results."
           ),
           class = "lede"
         )
@@ -436,7 +438,7 @@ pathways_ui <- function(id) {
       col_widths = c(7, 5, 12),
       bslib::card(
         full_screen = TRUE,
-        bslib::card_header("Featured directional pathway results"),
+        bslib::card_header("Featured pathway results"),
         htmltools::div(
           role = "region",
           `aria-label` = "Interactive pathway results",
@@ -496,7 +498,7 @@ pathways_ui <- function(id) {
         bslib::navset_card_tab(
           bslib::nav_panel("Genes", DT::DTOutput(ns("pathway_genes"))),
           bslib::nav_panel(
-            "All featured terms",
+            "Featured terms",
             DT::DTOutput(ns("pathway_table"))
           )
         )
