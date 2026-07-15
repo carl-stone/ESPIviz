@@ -85,7 +85,8 @@ about_ui <- function(id) {
                 "log count across all genes in each cell. Values can be",
                 "negative after centering; detection remains count > 0.",
                 "In the two-gene UMAP blend, raw counts define detection and",
-                "color intensity reflects within-gene PFlog strength among",
+                "color intensity reflects within-gene log normalized expression",
+                "strength among",
                 "detected cells."
               )
             )
@@ -119,7 +120,8 @@ about_ui <- function(id) {
                 "Selection summaries report expression and detection for",
                 "selected cells and all remaining cells. Sample summaries",
                 "preserve biological replicates, and cluster composition is",
-                "descriptive only. PFlog comparisons use differences rather",
+                "descriptive only. Log normalized expression comparisons use",
+                "differences rather",
                 "than ratios; detection ratios are blank when the denominator",
                 "is zero."
               )

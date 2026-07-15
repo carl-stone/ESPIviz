@@ -260,13 +260,13 @@ make_umap_plotly <- function(
       hover,
       "<br>",
       genes[[1L]],
-      " PFlog: ",
+      " Log normalized expression: ",
       formatC(data$expression_1, digits = 4L, format = "fg"),
       " (Raw detected: ",
       ifelse(data$detected_1, "yes", "no"),
       ")<br>",
       genes[[2L]],
-      " PFlog: ",
+      " Log normalized expression: ",
       formatC(data$expression_2, digits = 4L, format = "fg"),
       " (Raw detected: ",
       ifelse(data$detected_2, "yes", "no"),
@@ -297,7 +297,7 @@ make_umap_plotly <- function(
       hover,
       "<br>",
       genes[[1L]],
-      " PFlog: ",
+      " Log normalized expression: ",
       formatC(data$color_value, digits = 4L, format = "fg")
     )
     plot <- plotly::plot_ly(
@@ -324,7 +324,7 @@ make_umap_plotly <- function(
     )
     plot <- plotly::colorbar(
       plot,
-      title = paste(genes[[1L]], "PFlog"),
+      title = paste(genes[[1L]], "log normalized expression"),
       limits = c(-color_limit, color_limit)
     )
   } else {
@@ -487,7 +487,7 @@ make_umap_ggplot <- function(
         high = colors[[length(colors)]],
         midpoint = 0,
         limits = c(-color_limit, color_limit),
-        name = paste(genes[[1L]], "PFlog")
+        name = paste(genes[[1L]], "log normalized expression")
       )
   } else {
     palette <- discrete_palette(bundle, color_by, data$color_value)
@@ -675,7 +675,7 @@ make_expression_dot_plot <- function(data, group_label, rotate_x = FALSE) {
     ggplot2::labs(
       x = group_label,
       y = NULL,
-      color = "Mean PFlog",
+      color = "Mean log normalized expression",
       size = "Detected (%)"
     ) +
     ggplot2::guides(

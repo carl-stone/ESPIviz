@@ -140,7 +140,7 @@ test_that("cell-level violins retain PFlog values and selected-cell overlays", {
   expect_s3_class(plot, "ggplot")
   built <- ggplot2::ggplot_build(plot)
   expect_true(any(vapply(built$data, nrow, integer(1L)) == 4L))
-  expect_match(plot$labels$y, "PFlog", fixed = TRUE)
+  expect_match(plot$labels$y, "Log normalized expression", fixed = TRUE)
   expect_match(plot$labels$caption, "raw counts", fixed = TRUE)
 })
 
@@ -191,8 +191,16 @@ test_that("two-gene PFlog scatter excludes double-negative cells", {
   }, logical(1L))][[1L]]
   cell_6_index <- match("cell_6", as.character(cell_6_trace$key))
   expect_lt(as.numeric(cell_6_trace$y[[cell_6_index]]), 0)
-  expect_match(built$x$layout$xaxis$title$text, "Glul PFlog", fixed = TRUE)
-  expect_match(built$x$layout$yaxis$title$text, "EGFP PFlog", fixed = TRUE)
+  expect_match(
+    built$x$layout$xaxis$title$text,
+    "Glul log normalized expression",
+    fixed = TRUE
+  )
+  expect_match(
+    built$x$layout$yaxis$title$text,
+    "EGFP log normalized expression",
+    fixed = TRUE
+  )
   scope_html <- htmltools::renderTags(gene_pair_scope_ui(scope))$html
   expect_match(scope_html, "Showing 5 of 6 cells", fixed = TRUE)
   expect_match(scope_html, "artificial diagonal", fixed = TRUE)
@@ -230,7 +238,7 @@ test_that("selection snapshot is compact and uses raw-count detection", {
 
   html <- htmltools::renderTags(selection_snapshot_ui(observed))$html
   expect_match(html, "2 of 6 cells", fixed = TRUE)
-  expect_match(html, "Mean PFlog", fixed = TRUE)
+  expect_match(html, "Mean log normalized expression", fixed = TRUE)
   expect_match(html, "detected by raw count", fixed = TRUE)
   expect_match(html, 'aria-live="polite"', fixed = TRUE)
 
@@ -269,9 +277,9 @@ test_that("comparison table keeps only interpretable columns with plain headers"
     names(displayed$x$data),
     c(
       "Gene",
-      "Selected mean PFlog",
+      "Selected mean log normalized expression",
       "Selected detected (%)",
-      "Other cells mean PFlog",
+      "Other cells mean log normalized expression",
       "Other cells detected (%)",
       "Mean difference",
       "Detection difference (pp)"
@@ -285,7 +293,7 @@ test_that("comparison table keeps only interpretable columns with plain headers"
   expect_identical(names(all_cells), c("gene", "mean_expression", "detected_pct"))
   expect_identical(
     names(summary_datatable(all_cells)$x$data),
-    c("Gene", "Mean PFlog", "Detected (%)")
+    c("Gene", "Mean log normalized expression", "Detected (%)")
   )
 })
 
@@ -299,8 +307,8 @@ test_that("Explore exposes a compact two-gene cell-level workflow", {
     "Current gene is always the first plot gene",
     "Selected-cell summary",
     "Cell-level",
-    "PFlog distribution by final cluster",
-    "Two-gene PFlog scatter"
+    "Log normalized expression distribution by final cluster",
+    "Two-gene log normalized expression scatter"
   )) {
     expect_match(html, label, fixed = TRUE)
   }
@@ -340,7 +348,8 @@ test_that("optional second plot gene does not mutate global gene state", {
       expect_match(
         pair_html,
         paste(
-          "Per-cell PFlog scatter comparing Glul and EGFP colored by final",
+          "Per-cell log normalized expression scatter comparing Glul and",
+          "EGFP colored by final",
           "cluster for cells detected for at least one gene"
         ),
         fixed = TRUE

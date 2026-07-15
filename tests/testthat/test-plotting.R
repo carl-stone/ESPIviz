@@ -107,6 +107,10 @@ test_that("PFlog dot-plot color scales are symmetric around zero", {
 
   limit <- max(abs(plotted$mean_expression))
   expect_equal(color_scale$limits, c(-limit, limit))
+  expect_identical(
+    plot$labels$colour,
+    "Mean log normalized expression"
+  )
 
   zero <- summarize_selection(bundle, selected, "ZeroGene")$comparison
   zero_plot <- make_gene_comparison_plot(zero)
@@ -134,6 +138,10 @@ test_that("interactive PFlog UMAP uses a zero-centered colorbar", {
     built$x$data
   )
   expect_length(color_traces, 1L)
+  expect_identical(
+    color_traces[[1L]]$marker$colorbar$title,
+    "Glul log normalized expression"
+  )
   expect_equal(color_traces[[1L]]$marker$cmin, -limit, tolerance = 1e-12)
   expect_equal(color_traces[[1L]]$marker$cmax, limit, tolerance = 1e-12)
   expect_equal(

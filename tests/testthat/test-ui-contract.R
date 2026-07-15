@@ -52,7 +52,7 @@ test_that("Explore limits UMAP colors and exposes every selection mode", {
     synthetic_bundle()
   ))$html
 
-  expect_match(html, "PFlog expression", fixed = TRUE)
+  expect_match(html, "Log normalized expression", fixed = TRUE)
   expect_match(html, ">Cluster<", fixed = TRUE)
   expect_match(html, ">Condition<", fixed = TRUE)
   expect_match(html, "Clear selection", fixed = TRUE)
@@ -60,7 +60,7 @@ test_that("Explore limits UMAP colors and exposes every selection mode", {
   expect_no_match(html, "QC", fixed = TRUE)
 })
 
-test_that("Explore summary tables use plain-language PFlog labels", {
+test_that("Explore summary tables use plain-language expression labels", {
   table <- summary_datatable(data.frame(
     gene = "Glul",
     mean_expression = 1.25,
@@ -70,7 +70,7 @@ test_that("Explore summary tables use plain-language PFlog labels", {
 
   expect_identical(
     names(table$x$data),
-    c("Gene", "Mean PFlog", "Detected (%)")
+    c("Gene", "Mean log normalized expression", "Detected (%)")
   )
 })
 
@@ -91,7 +91,7 @@ test_that("Explore provides plotted summaries by cluster and condition", {
 
   expect_match(html, "explore_test-cluster_summary_plot_ui", fixed = TRUE)
   expect_match(html, "explore_test-condition_summary_plot_ui", fixed = TRUE)
-  expect_match(html, "Mean PFlog expression", fixed = TRUE)
+  expect_match(html, "Mean log normalized expression", fixed = TRUE)
   expect_match(html, "dot size", fixed = TRUE)
 })
 

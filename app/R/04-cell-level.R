@@ -244,9 +244,10 @@ make_violin_plot <- function(gene_data, bundle) {
     ggplot2::scale_fill_manual(values = palette, guide = "none") +
     ggplot2::labs(
       x = "Final cluster",
-      y = "PFlog expression",
+      y = "Log normalized expression",
       caption = paste(
-        "PFlog is centered and can be negative; detection uses raw counts.",
+        "Log normalized expression is centered and can be negative;",
+        "detection uses raw counts.",
         "Outlined points are explicitly selected cells."
       )
     ) +
@@ -309,7 +310,7 @@ gene_pair_scope_ui <- function(scope) {
       " (",
       excluded_pct,
       "%) to avoid the artificial diagonal created by their shared per-cell ",
-      "PFlog centering offset."
+      "log normalized expression centering offset."
     ),
     class = "supporting-copy gene-pair-scope",
     role = "status"
@@ -338,13 +339,13 @@ make_gene_pair_plotly <- function(gene_data, bundle, source) {
       cluster,
       "<br>",
       genes[[1L]],
-      " PFlog: ",
+      " Log normalized expression: ",
       formatC(trace_data$expression_1, digits = 4L, format = "fg"),
       " (Raw detected: ",
       ifelse(trace_data$detected_1, "yes", "no"),
       ")<br>",
       genes[[2L]],
-      " PFlog: ",
+      " Log normalized expression: ",
       formatC(trace_data$expression_2, digits = 4L, format = "fg"),
       " (Raw detected: ",
       ifelse(trace_data$detected_2, "yes", "no"),
@@ -379,12 +380,12 @@ make_gene_pair_plotly <- function(gene_data, bundle, source) {
   plot |>
     plotly::layout(
       xaxis = list(
-        title = list(text = paste(genes[[1L]], "PFlog")),
+        title = list(text = paste(genes[[1L]], "log normalized expression")),
         zeroline = TRUE,
         zerolinecolor = "#aab2b7"
       ),
       yaxis = list(
-        title = list(text = paste(genes[[2L]], "PFlog")),
+        title = list(text = paste(genes[[2L]], "log normalized expression")),
         zeroline = TRUE,
         zerolinecolor = "#aab2b7"
       ),
@@ -470,7 +471,7 @@ selection_snapshot_ui <- function(snapshot) {
           htmltools::strong(row$gene),
           htmltools::span(
             paste0(
-              "Mean PFlog: ",
+              "Mean log normalized expression: ",
               trimws(formatC(row$mean_pflog, digits = 3L, format = "fg"))
             )
           ),

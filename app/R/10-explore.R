@@ -38,7 +38,7 @@ explore_ui <- function(id, bundle) {
         ns("color_by"),
         "Color UMAP by",
         choices = c(
-          "PFlog expression" = "expression",
+          "Log normalized expression" = "expression",
           "Cluster" = "cluster",
           "Condition" = "condition"
         )
@@ -241,13 +241,14 @@ explore_ui <- function(id, bundle) {
           bslib::nav_panel(
             "Cell-level",
             htmltools::h3(
-              "PFlog distribution by final cluster",
+              "Log normalized expression distribution by final cluster",
               class = "result-title"
             ),
             htmltools::p(
               paste(
                 "Violins show the current gene and optional second plot gene",
-                "across final clusters. PFlog is centered and can be negative;",
+                "across final clusters. Log normalized expression is centered",
+                "and can be negative;",
                 "outlined points mark explicitly selected cells."
               ),
               class = "supporting-copy"
@@ -255,7 +256,7 @@ explore_ui <- function(id, bundle) {
             shiny::uiOutput(ns("violin_plot_ui")),
             htmltools::hr(class = "result-divider"),
             htmltools::h3(
-              "Two-gene PFlog scatter",
+              "Two-gene log normalized expression scatter",
               class = "result-title"
             ),
             htmltools::p(
@@ -264,7 +265,8 @@ explore_ui <- function(id, bundle) {
                 "color identifies its final cluster.",
                 "Larger outlined diamonds are explicitly selected cells.",
                 "Choose a second plot gene in the sidebar to compare two genes;",
-                "hover text reports PFlog and raw-count detection."
+                "hover text reports log normalized expression and raw-count",
+                "detection."
               ),
               class = "supporting-copy"
             ),
@@ -279,7 +281,7 @@ explore_ui <- function(id, bundle) {
             htmltools::p(
               paste(
                 "Samples are the biological replicates and are ordered by",
-                "condition. Mean PFlog expression is shown by color; detected-cell",
+                "condition. Mean log normalized expression is shown by color; detected-cell",
                 "percentage is shown by dot size."
               ),
               class = "supporting-copy"
@@ -312,7 +314,7 @@ explore_ui <- function(id, bundle) {
               paste(
                 "This descriptive view pools cells within each condition.",
                 "Use the sample view above to inspect replicate consistency.",
-                "Mean PFlog expression is shown by color and detected-cell",
+                "Mean log normalized expression is shown by color and detected-cell",
                 "percentage by dot size."
               ),
               class = "supporting-copy"
@@ -327,7 +329,7 @@ explore_ui <- function(id, bundle) {
               class = "result-title"
             ),
             htmltools::p(
-              "Mean PFlog expression is shown by color; detected-cell percentage is shown by dot size.",
+              "Mean log normalized expression is shown by color; detected-cell percentage is shown by dot size.",
               class = "supporting-copy"
             ),
             shiny::uiOutput(ns("cluster_summary_plot_ui")),
@@ -384,19 +386,19 @@ summary_datatable <- function(data, page_length = 25L) {
     sample_total = "Sample cells",
     selected_n = "Selected cells",
     remaining_n = "Remaining cells",
-    selected_mean = "Selected mean PFlog",
-    selected_median = "Selected median PFlog",
+    selected_mean = "Selected mean log normalized expression",
+    selected_median = "Selected median log normalized expression",
     selected_detected_n = "Selected detected cells",
     selected_detected_pct = "Selected detected (%)",
-    remaining_mean = "Other cells mean PFlog",
-    remaining_median = "Remaining median PFlog",
+    remaining_mean = "Other cells mean log normalized expression",
+    remaining_median = "Remaining median log normalized expression",
     remaining_detected_n = "Remaining detected cells",
     remaining_detected_pct = "Other cells detected (%)",
     mean_difference = "Mean difference",
     detection_pp_difference = "Detection difference (pp)",
     detection_ratio = "Detection ratio",
-    mean_expression = "Mean PFlog",
-    median_expression = "Median PFlog",
+    mean_expression = "Mean log normalized expression",
+    median_expression = "Median log normalized expression",
     detected_n = "Detected cells",
     detected_pct = "Detected (%)",
     cell_pct = "Within sample (%)"
@@ -805,10 +807,10 @@ explore_server <- function(id, bundle, state) {
       height = function() comparison_plot_height(length(page_info()$genes)),
       alt = function() {
         paste(
-          "Dot plot comparing PFlog expression for",
+          "Dot plot comparing log normalized expression for",
           length(page_info()$genes),
           "genes across all cells, selected cells, and remaining cells.",
-          "Color shows mean PFlog expression; dot size shows the percentage of",
+          "Color shows mean log normalized expression; dot size shows the percentage of",
           "cells with detected expression."
         )
       }
@@ -830,7 +832,7 @@ explore_server <- function(id, bundle, state) {
       htmltools::div(
         role = "region",
         `aria-label` = paste(
-          "PFlog distribution violin plot for",
+          "Log normalized expression distribution violin plot for",
           paste(plot_genes(), collapse = " and "),
           "by final cluster"
         ),
@@ -846,9 +848,10 @@ explore_server <- function(id, bundle, state) {
       height = function() violin_height(),
       alt = function() {
         paste(
-          "Violin plot of PFlog expression for",
+          "Violin plot of log normalized expression for",
           paste(plot_genes(), collapse = " and "),
-          "across final clusters. PFlog is centered and can be negative.",
+          "across final clusters. Log normalized expression is centered and",
+          "can be negative.",
           "Outlined points mark explicitly selected cells; detection is based",
           "on raw counts and is reported in the selected-cell summary."
         )
@@ -875,7 +878,7 @@ explore_server <- function(id, bundle, state) {
       htmltools::div(
         role = "region",
         `aria-label` = paste(
-          "Per-cell PFlog scatter comparing",
+          "Per-cell log normalized expression scatter comparing",
           plot_genes()[[1L]],
           "and",
           plot_genes()[[2L]],
@@ -929,9 +932,9 @@ explore_server <- function(id, bundle, state) {
       height = function() comparison_plot_height(length(page_info()$genes)),
       alt = function() {
         paste(
-          "Dot plot of PFlog expression for",
+          "Dot plot of log normalized expression for",
           length(page_info()$genes),
-          "genes across pooled conditions. Color shows mean PFlog expression;",
+          "genes across pooled conditions. Color shows mean log normalized expression;",
           "dot size shows the percentage of selected cells with detected",
           "expression."
         )
@@ -955,12 +958,12 @@ explore_server <- function(id, bundle, state) {
       height = function() comparison_plot_height(length(page_info()$genes)),
       alt = function() {
         paste(
-          "Dot plot of PFlog expression for",
+          "Dot plot of log normalized expression for",
           length(page_info()$genes),
           "genes across",
           length(unique(sample_page_summary()$sample)),
-          "biological samples ordered by condition. Color shows mean PFlog",
-          "expression; dot size shows the percentage of selected cells",
+          "biological samples ordered by condition. Color shows mean log",
+          "normalized expression; dot size shows the percentage of selected cells",
           "with detected expression."
         )
       }
@@ -999,9 +1002,9 @@ explore_server <- function(id, bundle, state) {
       height = function() comparison_plot_height(length(page_info()$genes)),
       alt = function() {
         paste(
-          "Dot plot of PFlog expression for",
+          "Dot plot of log normalized expression for",
           length(page_info()$genes),
-          "genes across final clusters. Color shows mean PFlog expression; dot",
+          "genes across final clusters. Color shows mean log normalized expression; dot",
           "size shows the percentage of selected cells with detected",
           "expression."
         )
@@ -1092,7 +1095,7 @@ explore_server <- function(id, bundle, state) {
           input$marker_cluster %||% "",
           " across all final clusters. Genes shown: ",
           paste(genes, collapse = ", "),
-          ". Color is relative mean PFlog expression scaled within each gene; ",
+          ". Color is relative mean log normalized expression scaled within each gene; ",
           "dot size is the percentage of cells with detected expression."
         )
       }
