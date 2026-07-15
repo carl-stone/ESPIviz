@@ -621,3 +621,33 @@ test_that("optional second plot gene does not mutate global gene state", {
     }
   )
 })
+
+test_that("manual plot-gene pairs populate every expression summary", {
+  bundle <- synthetic_bundle()
+  state <- new_app_state(bundle)
+
+  shiny::testServer(
+    explore_server,
+    args = list(bundle = bundle, state = state),
+    {
+      expect_expression_summary_genes <- function(expected) {
+        expect_identical(page_info()$genes, expected)
+        expect_identical(page_comparison()$gene, expected)
+        expect_setequal(unique(sample_page_summary()$gene), expected)
+        expect_setequal(unique(condition_page_summary()$gene), expected)
+        expect_setequal(unique(cluster_page_summary()$gene), expected)
+      }
+
+      session$setInputs(
+        active_gene = "Glul",
+        secondary_gene = "EGFP"
+      )
+
+      expect_expression_summary_genes(c("Glul", "EGFP"))
+
+      state$gene_set(c("Mcm2", "Other"))
+      session$flushReact()
+      expect_expression_summary_genes(c("Glul", "EGFP", "Mcm2", "Other"))
+    }
+  )
+})
