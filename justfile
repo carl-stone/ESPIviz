@@ -1,7 +1,7 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 source_manifest := "config/source-manifest.local.json"
-data_output := "dist/espiviz-data-v1.0.0.rds"
+data_output := "dist/espiviz-data-v1.1.1.rds"
 
 default:
     @just --list

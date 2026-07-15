@@ -21,8 +21,5 @@
   },
   "featured_genes_config": {
     "path": "/absolute/path/to/ESPIviz/config/featured-genes.csv"
-  },
-  "featured_pathways_config": {
-    "path": "/absolute/path/to/ESPIviz/config/featured-pathways.csv"
   }
 }

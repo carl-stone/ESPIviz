@@ -5,9 +5,10 @@ It provides final-clustering UMAP exploration, gene and gene-set expression
 summaries across clusters, conditions, and biological samples, descriptive
 sample-level cluster composition, marker overviews, two-gene UMAP blends,
 cluster violins, per-cell gene-pair scatter plots, the complete primary
-condition-model differential-expression result with MA and volcano views, and a
-curated short set of manuscript-aligned pathways shown on method-specific score
-scales.
+condition-model differential-expression result with MA and volcano views, and
+complete Gene Ontology Biological Process enrichment results. Pathway plots
+show the 10 GSEA and ORA terms with the lowest adjusted P values in each
+direction, on method-specific score scales.
 
 **[Open ESPIviz](https://019f6264-f0b5-e432-795c-c2f7e9fd5c95.share.connect.posit.cloud/)**
 
@@ -44,12 +45,13 @@ stored normalized layer.
 
 - `app/`: modular Shiny application and its Connect Cloud manifest
 - `scripts/`: standalone, manifest-driven bundle exporter
-- `config/`: featured genes, featured pathways, and source-manifest example
+- `config/`: featured genes, historical v1 pathway selection, and
+  source-manifest example
 - `tests/`: synthetic contract and behavior tests
 
-No manuscript object, original barcode, private path, or exhaustive enrichment
-output is committed here. The application downloads a versioned public bundle
-whose URL and SHA-256 checksum live in `app/data-manifest.json`.
+No manuscript object, original barcode, private path, or enrichment-result file
+is committed here. The application downloads a versioned public bundle whose
+URL and SHA-256 checksum live in `app/data-manifest.json`.
 
 ## Local development
 
@@ -76,7 +78,7 @@ before building data. `just data-dry-run` validates those inputs without writing
 a bundle. To run against a local bundle:
 
 ```sh
-just app-run /absolute/path/to/espiviz-data-v1.0.0.rds
+just app-run /absolute/path/to/espiviz-data-v1.1.1.rds
 ```
 
 `just manifest` scans `app/` only, keeping Seurat, `scclrR`, and other exporter

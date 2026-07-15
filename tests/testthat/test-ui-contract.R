@@ -225,19 +225,31 @@ test_that("pathway details render with supported HTML tags", {
 
   expect_match(gsea_html, "<dl>", fixed = TRUE)
   expect_match(gsea_html, "<dt>Method</dt>", fixed = TRUE)
+  expect_match(gsea_html, "<dt>Ontology</dt>", fixed = TRUE)
+  expect_match(
+    gsea_html,
+    "Gene Ontology (GO), Biological Process (BP)",
+    fixed = TRUE
+  )
   expect_match(gsea_html, "Source gene-set size", fixed = TRUE)
   expect_match(gsea_html, "Exported leading-edge genes", fixed = TRUE)
   expect_match(ora_html, "Overlapping genes", fixed = TRUE)
   expect_match(ora_html, "Exported overlapping genes", fixed = TRUE)
 })
 
-test_that("Pathways identifies the bundled terms as a curated subset", {
+test_that("Pathways presents top plots and side-by-side enrichment tables", {
   html <- htmltools::renderTags(pathways_ui("pathways_test"))$html
 
-  expect_match(html, "Curated manuscript terms", fixed = TRUE)
-  expect_match(html, "not an exhaustive list", fixed = TRUE)
-  expect_match(html, ">Featured terms<", fixed = TRUE)
-  expect_no_match(html, ">All featured terms<", fixed = TRUE)
+  expect_match(html, "Top pathway results", fixed = TRUE)
+  expect_match(html, ">Enrichment results<", fixed = TRUE)
+  expect_match(html, ">Genes<", fixed = TRUE)
+  expect_match(html, 'col-widths-sm="9,3"', fixed = TRUE)
+  expect_lt(
+    regexpr(">Enrichment results<", html, fixed = TRUE)[[1L]],
+    regexpr(">Genes<", html, fixed = TRUE)[[1L]]
+  )
+  expect_no_match(html, "Featured", fixed = TRUE)
+  expect_no_match(html, "featured", fixed = TRUE)
 })
 
 test_that("About data links render with supported list tags", {

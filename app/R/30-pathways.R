@@ -12,7 +12,7 @@ prepare_pathway_plot_data <- function(pathways) {
     stop("Pathway plot data are missing required columns.", call. = FALSE)
   }
   if (nrow(pathways) == 0L) {
-    stop("At least one featured pathway is required.", call. = FALSE)
+    stop("At least one enrichment result is required.", call. = FALSE)
   }
 
   data <- pathways
@@ -30,9 +30,6 @@ prepare_pathway_plot_data <- function(pathways) {
   }
   if (anyNA(data$label) || any(!nzchar(data$label))) {
     stop("Pathway labels must be complete.", call. = FALSE)
-  }
-  if (anyDuplicated(data$label)) {
-    stop("Pathway labels must be unique.", call. = FALSE)
   }
   if (
     anyNA(data$score) ||
@@ -72,6 +69,20 @@ prepare_pathway_plot_data <- function(pathways) {
     levels = direction_levels,
     ordered = TRUE
   )
+  repeated_labels <- duplicated(data$label) |
+    duplicated(data$label, fromLast = TRUE)
+  data$plot_label <- ifelse(
+    repeated_labels,
+    paste(data$label, source_values, direction_values, sep = " · "),
+    data$label
+  )
+  repeated_plot_labels <- duplicated(data$plot_label) |
+    duplicated(data$plot_label, fromLast = TRUE)
+  data$plot_label[repeated_plot_labels] <- paste(
+    data$plot_label[repeated_plot_labels],
+    data$pathway_id[repeated_plot_labels],
+    sep = " · "
+  )
   data$score_label <- ifelse(source_values == "GSEA", "NES", "Fold enrichment")
   data$baseline <- ifelse(source_values == "GSEA", 0, 1)
   data$count_label <- ifelse(
@@ -108,6 +119,39 @@ prepare_pathway_plot_data <- function(pathways) {
     format(data$gene_count, big.mark = ",", scientific = FALSE, trim = TRUE)
   )
   data
+}
+
+top_pathway_results <- function(pathways, n_per_direction = 10L) {
+  if (
+    length(n_per_direction) != 1L ||
+      is.na(n_per_direction) ||
+      n_per_direction < 1 ||
+      n_per_direction != as.integer(n_per_direction)
+  ) {
+    stop("n_per_direction must be one positive integer.", call. = FALSE)
+  }
+
+  data <- prepare_pathway_plot_data(pathways)
+  data <- data[
+    order(
+      data$source,
+      data$direction,
+      data$p_adjust,
+      -abs(data$score),
+      data$label
+    ),
+    ,
+    drop = FALSE
+  ]
+  groups <- interaction(data$source, data$direction, drop = TRUE)
+  group_rank <- ave(seq_len(nrow(data)), groups, FUN = seq_along)
+  selected_ids <- data$pathway_id[group_rank <= as.integer(n_per_direction)]
+
+  pathways[
+    match(selected_ids, as.character(pathways$pathway_id)),
+    ,
+    drop = FALSE
+  ]
 }
 
 pathway_direction_palette <- function() {
@@ -153,9 +197,9 @@ make_pathway_plotly <- function(pathways, active_pathway, source) {
       ,
       drop = FALSE
     ]
-    method_data$label <- factor(
-      method_data$label,
-      levels = unique(method_data$label),
+    method_data$plot_label <- factor(
+      method_data$plot_label,
+      levels = unique(method_data$plot_label),
       ordered = TRUE
     )
     panel_data[[method_index]] <- method_data
@@ -175,7 +219,7 @@ make_pathway_plotly <- function(pathways, active_pathway, source) {
         panel,
         data = direction_data,
         x = ~score,
-        y = ~label,
+        y = ~plot_label,
         key = ~pathway_key,
         customdata = ~pathway_id,
         text = ~hover_text,
@@ -208,7 +252,7 @@ make_pathway_plotly <- function(pathways, active_pathway, source) {
           title = list(text = method),
           automargin = TRUE,
           categoryorder = "array",
-          categoryarray = as.character(method_data$label)
+          categoryarray = as.character(method_data$plot_label)
         )
       )
   }
@@ -278,10 +322,14 @@ make_pathway_ggplot <- function(pathways, active_pathway) {
     ,
     drop = FALSE
   ]
-  data$label <- factor(data$label, levels = unique(data$label), ordered = TRUE)
+  data$plot_label <- factor(
+    data$plot_label,
+    levels = unique(data$plot_label),
+    ordered = TRUE
+  )
   baselines <- unique(data[c("panel_label", "baseline")])
 
-  ggplot2::ggplot(data, ggplot2::aes(x = score, y = label)) +
+  ggplot2::ggplot(data, ggplot2::aes(x = score, y = plot_label)) +
     ggplot2::geom_vline(
       data = baselines,
       ggplot2::aes(xintercept = baseline),
@@ -394,6 +442,8 @@ pathway_detail_ui <- function(row, genes) {
       htmltools::tags$dd(as.character(data$direction[[1L]])),
       htmltools::tags$dt("Method"),
       htmltools::tags$dd(as.character(data$source[[1L]])),
+      htmltools::tags$dt("Ontology"),
+      htmltools::tags$dd("Gene Ontology (GO), Biological Process (BP)"),
       htmltools::tags$dt(data$score_label[[1L]]),
       htmltools::tags$dd(trimws(formatC(
         data$score[[1L]],
@@ -421,14 +471,14 @@ pathways_ui <- function(id) {
     htmltools::div(
       class = "page-heading",
       htmltools::div(
-        htmltools::p("Curated manuscript terms", class = "eyebrow"),
+        htmltools::p("Complete enrichment analysis", class = "eyebrow"),
         htmltools::h1("Pathways"),
         htmltools::p(
           paste(
-            "Featured directional GSEA and ORA results from the primary",
-            "condition analysis, shown on method-specific score scales.",
-            "This manuscript-focused view is not an exhaustive list of",
-            "significant enrichment results."
+            "Top directional GSEA and ORA results from the primary condition",
+            "analysis are shown on method-specific score scales. The complete",
+            "enrichment results, including non-significant terms, are",
+            "available below."
           ),
           class = "lede"
         )
@@ -438,17 +488,19 @@ pathways_ui <- function(id) {
       col_widths = c(7, 5, 12),
       bslib::card(
         full_screen = TRUE,
-        bslib::card_header("Featured pathway results"),
+        bslib::card_header("Top pathway results"),
         htmltools::div(
           role = "region",
           `aria-label` = "Interactive pathway results",
           `aria-describedby` = ns("pathway_plot_note"),
-          plotly::plotlyOutput(ns("pathway_plot"), height = "600px")
+          plotly::plotlyOutput(ns("pathway_plot"), height = "950px")
         ),
         htmltools::p(
           id = ns("pathway_plot_note"),
           class = "small text-body-secondary px-3 pb-3 mb-0",
           paste(
+            "Each method shows the 10 terms with the lowest adjusted P",
+            "values in each direction.",
             "GSEA uses NES (neutral = 0); ORA uses fold enrichment",
             "(neutral = 1). Color and shape mark direction; point size",
             "marks adjusted-P strength, and an outline marks the selected",
@@ -459,7 +511,12 @@ pathways_ui <- function(id) {
       ),
       bslib::card(
         bslib::card_header("Pathway details"),
-        shiny::selectInput(ns("pathway"), "Pathway", choices = NULL),
+        shiny::selectizeInput(
+          ns("pathway"),
+          "Pathway",
+          choices = NULL,
+          options = list(placeholder = "Search enrichment results")
+        ),
         shiny::uiOutput(ns("pathway_detail")),
         bslib::layout_columns(
           col_widths = c(6, 6),
@@ -493,14 +550,15 @@ pathways_ui <- function(id) {
           )
         )
       ),
-      bslib::card(
-        class = "span-12",
-        bslib::navset_card_tab(
-          bslib::nav_panel("Genes", DT::DTOutput(ns("pathway_genes"))),
-          bslib::nav_panel(
-            "Featured terms",
-            DT::DTOutput(ns("pathway_table"))
-          )
+      bslib::layout_columns(
+        col_widths = c(9, 3),
+        bslib::card(
+          bslib::card_header("Enrichment results"),
+          DT::DTOutput(ns("pathway_table"))
+        ),
+        bslib::card(
+          bslib::card_header("Genes"),
+          DT::DTOutput(ns("pathway_genes"))
         )
       )
     )
@@ -510,17 +568,25 @@ pathways_ui <- function(id) {
 pathways_server <- function(id, bundle, state, navigate_explore) {
   shiny::moduleServer(id, function(input, output, session) {
     source_id <- session$ns("pathway_source")
+    plotted_pathways <- top_pathway_results(bundle$pathways)
     pathway_choices <- stats::setNames(
       as.character(bundle$pathways$pathway_id),
-      as.character(bundle$pathways$label)
+      paste0(
+        as.character(bundle$pathways$label),
+        " — ",
+        as.character(bundle$pathways$source),
+        ", ",
+        as.character(bundle$pathways$direction)
+      )
     )
 
     shiny::observe({
-      shiny::updateSelectInput(
+      shiny::updateSelectizeInput(
         session,
         "pathway",
         choices = pathway_choices,
-        selected = state$active_pathway()
+        selected = state$active_pathway(),
+        server = TRUE
       )
     })
 
@@ -538,7 +604,7 @@ pathways_server <- function(id, bundle, state, navigate_explore) {
     )
 
     output$pathway_plot <- plotly::renderPlotly({
-      make_pathway_plotly(bundle$pathways, state$active_pathway(), source_id)
+      make_pathway_plotly(plotted_pathways, state$active_pathway(), source_id)
     })
     shiny::outputOptions(output, "pathway_plot", suspendWhenHidden = FALSE)
 
@@ -638,13 +704,13 @@ pathways_server <- function(id, bundle, state, navigate_explore) {
     )
 
     output$download_pathway_png <- shiny::downloadHandler(
-      filename = function() "espiviz-featured-pathways.png",
+      filename = function() "espiviz-top-pathways.png",
       content = function(file) {
         ggplot2::ggsave(
           file,
-          plot = make_pathway_ggplot(bundle$pathways, state$active_pathway()),
+          plot = make_pathway_ggplot(plotted_pathways, state$active_pathway()),
           width = 9,
-          height = 6.5,
+          height = 11,
           dpi = 320,
           bg = "white"
         )
@@ -652,14 +718,14 @@ pathways_server <- function(id, bundle, state, navigate_explore) {
     )
 
     output$download_pathway_pdf <- shiny::downloadHandler(
-      filename = function() "espiviz-featured-pathways.pdf",
+      filename = function() "espiviz-top-pathways.pdf",
       content = function(file) {
         ggplot2::ggsave(
           file,
-          plot = make_pathway_ggplot(bundle$pathways, state$active_pathway()),
+          plot = make_pathway_ggplot(plotted_pathways, state$active_pathway()),
           device = grDevices::cairo_pdf,
           width = 9,
-          height = 6.5,
+          height = 11,
           bg = "white"
         )
       }
