@@ -202,6 +202,22 @@ test_that("gene-expression UMAP draws high-expressing cells last", {
   expect_identical(clusters$cell_id, bundle$cells$cell_id)
 })
 
+test_that("single-gene detection UMAP uses raw counts", {
+  bundle <- synthetic_bundle()
+  plotted <- umap_plot_data(bundle, "detection", "Glul")
+  observed <- stats::setNames(as.character(plotted$color_value), plotted$cell_id)
+  expected <- ifelse(bundle$counts[, "Glul"] > 0, "Detected", "Not detected")
+
+  expect_identical(
+    unname(observed[bundle$cells$cell_id]),
+    unname(expected)
+  )
+  expect_identical(
+    unique(plotted$color_label),
+    "Glul raw-count detection"
+  )
+})
+
 test_that("cluster labels use one on-data position per cluster", {
   expect_app_helper("cluster_label_positions")
   bundle <- synthetic_bundle()
@@ -268,7 +284,7 @@ test_that("cluster UMAP labels appear interactively and in downloads", {
 test_that("interactive UMAP traces preserve every cell key and selected key", {
   bundle <- synthetic_bundle()
 
-  for (color_by in c("expression", "condition", "cluster")) {
+  for (color_by in c("expression", "detection", "condition", "cluster")) {
     built <- plotly::plotly_build(make_umap_plotly(
       bundle,
       color_by = color_by,

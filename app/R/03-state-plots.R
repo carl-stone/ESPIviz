@@ -114,6 +114,15 @@ umap_plot_data <- function(bundle, color_by, gene) {
     cells$color_value <- as.numeric(expression_matrix(bundle, gene)[, 1L])
     cells$color_label <- gene
     cells <- cells[order(cells$color_value, na.last = TRUE), , drop = FALSE]
+  } else if (identical(color_by, "detection")) {
+    matched_gene <- match_bundle_genes(bundle, gene)$genes[[1L]]
+    detected <- as.numeric(bundle$counts[, matched_gene]) > 0
+    cells$color_value <- factor(
+      ifelse(detected, "Detected", "Not detected"),
+      levels = c("Not detected", "Detected")
+    )
+    cells$color_label <- paste(matched_gene, "raw-count detection")
+    cells <- cells[order(cells$color_value), , drop = FALSE]
   } else if (identical(color_by, "cluster")) {
     cells$color_value <- factor(
       as.character(cells$cluster),
@@ -237,12 +246,20 @@ make_umap_plotly <- function(
   gene_data = NULL
 ) {
   genes <- normalize_plot_genes(bundle, gene, default_active_gene(bundle))
-  blend_mode <- identical(color_by, "expression") && length(genes) == 2L
-  if (blend_mode) {
+  expression_blend_mode <- identical(color_by, "expression") &&
+    length(genes) == 2L
+  detection_blend_mode <- identical(color_by, "detection") &&
+    length(genes) == 2L
+  two_gene_color_mode <- expression_blend_mode || detection_blend_mode
+  if (two_gene_color_mode) {
     if (is.null(gene_data)) {
       gene_data <- prepare_plot_gene_data(bundle, genes, selected_cell_ids)
     }
-    data <- prepare_umap_blend_data(gene_data)
+    data <- if (expression_blend_mode) {
+      prepare_umap_expression_blend_data(gene_data)
+    } else {
+      prepare_umap_detection_data(gene_data)
+    }
   } else {
     data <- umap_plot_data(bundle, color_by, genes[[1L]])
   }
@@ -255,23 +272,42 @@ make_umap_plotly <- function(
     "<br>Condition: ",
     data$condition
   )
-  if (blend_mode) {
+  if (expression_blend_mode) {
     hover <- paste0(
       hover,
       "<br>",
       genes[[1L]],
       " Log normalized expression: ",
       formatC(data$expression_1, digits = 4L, format = "fg"),
-      " (Raw detected: ",
-      ifelse(data$detected_1, "yes", "no"),
-      ")<br>",
+      "<br>",
       genes[[2L]],
       " Log normalized expression: ",
-      formatC(data$expression_2, digits = 4L, format = "fg"),
-      " (Raw detected: ",
-      ifelse(data$detected_2, "yes", "no"),
-      ")"
+      formatC(data$expression_2, digits = 4L, format = "fg")
     )
+  } else if (detection_blend_mode) {
+    hover <- paste0(
+      hover,
+      "<br>",
+      genes[[1L]],
+      " Raw detected: ",
+      ifelse(data$detected_1, "yes", "no"),
+      "<br>",
+      genes[[2L]],
+      " Raw detected: ",
+      ifelse(data$detected_2, "yes", "no"),
+      "<br>Detection class: ",
+      data$blend_class
+    )
+  } else if (identical(color_by, "detection")) {
+    hover <- paste0(
+      hover,
+      "<br>",
+      genes[[1L]],
+      " Raw detected: ",
+      ifelse(as.character(data$color_value) == "Detected", "yes", "no")
+    )
+  }
+  if (two_gene_color_mode) {
     plot <- plotly::plot_ly(
       data = data,
       x = ~umap_1,
@@ -328,7 +364,14 @@ make_umap_plotly <- function(
       limits = c(-color_limit, color_limit)
     )
   } else {
-    palette <- discrete_palette(bundle, color_by, data$color_value)
+    palette <- if (identical(color_by, "detection")) {
+      c(
+        "Not detected" = blend_palette()[["Neither detected"]],
+        "Detected" = blend_palette()[["Gene 1"]]
+      )
+    } else {
+      discrete_palette(bundle, color_by, data$color_value)
+    }
     plot <- plotly::plot_ly(
       data = data,
       x = ~umap_1,
@@ -443,19 +486,27 @@ make_umap_ggplot <- function(
   gene_data = NULL
 ) {
   genes <- normalize_plot_genes(bundle, gene, default_active_gene(bundle))
-  blend_mode <- identical(color_by, "expression") && length(genes) == 2L
-  if (blend_mode) {
+  expression_blend_mode <- identical(color_by, "expression") &&
+    length(genes) == 2L
+  detection_blend_mode <- identical(color_by, "detection") &&
+    length(genes) == 2L
+  two_gene_color_mode <- expression_blend_mode || detection_blend_mode
+  if (two_gene_color_mode) {
     if (is.null(gene_data)) {
       gene_data <- prepare_plot_gene_data(bundle, genes, selected_cell_ids)
     }
-    data <- prepare_umap_blend_data(gene_data)
+    data <- if (expression_blend_mode) {
+      prepare_umap_expression_blend_data(gene_data)
+    } else {
+      prepare_umap_detection_data(gene_data)
+    }
   } else {
     data <- umap_plot_data(bundle, color_by, genes[[1L]])
   }
   point_style <- umap_point_style(nrow(data))
   plot <- ggplot2::ggplot(data, ggplot2::aes(x = umap_1, y = umap_2))
   caption <- NULL
-  if (blend_mode) {
+  if (two_gene_color_mode) {
     plot <- plot +
       ggplot2::geom_point(
         ggplot2::aes(color = blend_color),
@@ -463,14 +514,24 @@ make_umap_ggplot <- function(
         alpha = point_style$static_opacity
       ) +
       ggplot2::scale_color_identity()
-    caption <- paste0(
-      "Blend legend — gray: Neither detected; orange: ",
-      genes[[1L]],
-      " detected; blue: ",
-      genes[[2L]],
-      " detected; purple: Both detected",
-      ". Detection uses raw counts."
-    )
+    caption <- if (expression_blend_mode) {
+      paste0(
+        "Expression blend — gray: low both; orange: high ",
+        genes[[1L]],
+        "; blue: high ",
+        genes[[2L]],
+        "; purple: high both. Each gene's log normalized expression is ",
+        "scaled independently from its minimum to maximum across cells."
+      )
+    } else {
+      paste0(
+        "Detection legend — gray: Neither detected; orange: ",
+        genes[[1L]],
+        " detected; blue: ",
+        genes[[2L]],
+        " detected; purple: Both detected. Detection uses raw counts."
+      )
+    }
   } else if (identical(color_by, "expression")) {
     colors <- expression_palette(bundle)
     color_limit <- expression_color_limit(data$color_value)
@@ -490,7 +551,14 @@ make_umap_ggplot <- function(
         name = paste(genes[[1L]], "log normalized expression")
       )
   } else {
-    palette <- discrete_palette(bundle, color_by, data$color_value)
+    palette <- if (identical(color_by, "detection")) {
+      c(
+        "Not detected" = blend_palette()[["Neither detected"]],
+        "Detected" = blend_palette()[["Gene 1"]]
+      )
+    } else {
+      discrete_palette(bundle, color_by, data$color_value)
+    }
     plot <- plot +
       ggplot2::geom_point(
         ggplot2::aes(color = color_value),
@@ -536,7 +604,9 @@ make_umap_ggplot <- function(
     ggplot2::theme_minimal(base_family = "sans", base_size = 11) +
     ggplot2::theme(
       panel.grid = ggplot2::element_blank(),
-      legend.position = if (identical(color_by, "cluster") || blend_mode) {
+      legend.position = if (
+        identical(color_by, "cluster") || two_gene_color_mode
+      ) {
         "none"
       } else {
         "bottom"

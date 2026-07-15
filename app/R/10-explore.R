@@ -43,6 +43,7 @@ explore_ui <- function(id, bundle) {
         "Color UMAP by",
         choices = c(
           "Log normalized expression" = "expression",
+          "Detection" = "detection",
           "Cluster" = "cluster",
           "Condition" = "condition"
         )
@@ -683,10 +684,14 @@ explore_server <- function(id, bundle, state) {
         input$color_by %||% "expression",
         expression = if (length(plot_genes()) == 2L) {
           paste(plot_genes(), collapse = " + ") |>
-            paste("blend")
+            paste("expression blend")
         } else {
           plot_genes()[[1L]]
         },
+        detection = paste(
+          paste(plot_genes(), collapse = " + "),
+          "detection"
+        ),
         cluster = "Final cluster",
         condition = "Condition"
       )
@@ -695,12 +700,18 @@ explore_server <- function(id, bundle, state) {
 
     output$umap_legend <- shiny::renderUI({
       if (
-        !identical(input$color_by %||% "expression", "expression") ||
+        !(input$color_by %||% "expression") %in% c(
+          "expression",
+          "detection"
+        ) ||
           length(plot_genes()) != 2L
       ) {
         return(NULL)
       }
-      blend_legend_ui(plot_genes())
+      blend_legend_ui(
+        plot_genes(),
+        mode = input$color_by %||% "expression"
+      )
     })
 
     output$umap <- plotly::renderPlotly({

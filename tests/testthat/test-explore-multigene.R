@@ -44,20 +44,26 @@ test_that("plot-gene data keeps two canonical genes, PFlog, and raw detection", 
   expect_lt(low_detected$expression_2, 0)
 })
 
-test_that("two-gene blend uses raw double-negative status and named colors", {
-  expect_app_helper("prepare_umap_blend_data")
+test_that("two-gene expression blend scales each normalized-expression axis", {
+  expect_app_helper("prepare_umap_expression_blend_data")
   expect_app_helper("blend_legend_ui")
   bundle <- synthetic_bundle()
   gene_data <- prepare_plot_gene_data(bundle, c("Glul", "EGFP"))
 
-  observed <- prepare_umap_blend_data(gene_data)
-  classes <- stats::setNames(observed$blend_class, observed$cell_id)
+  gene_data$detected_1 <- FALSE
+  gene_data$detected_2 <- FALSE
+  observed <- prepare_umap_expression_blend_data(gene_data)
 
-  expect_identical(classes[["cell_1"]], "Glul detected")
-  expect_identical(classes[["cell_2"]], "EGFP detected")
-  expect_identical(classes[["cell_3"]], "Both detected")
-  expect_identical(classes[["cell_4"]], "Neither detected")
-  expect_identical(classes[["cell_6"]], "EGFP detected")
+  expect_equal(
+    observed$strength_1,
+    (observed$expression_1 - min(observed$expression_1)) /
+      diff(range(observed$expression_1))
+  )
+  expect_equal(
+    observed$strength_2,
+    (observed$expression_2 - min(observed$expression_2)) /
+      diff(range(observed$expression_2))
+  )
   expect_true(all(grepl("^#[0-9A-F]{6}$", observed$blend_color)))
   expect_identical(
     observed$blend_color[observed$cell_id == "cell_4"],
@@ -66,7 +72,42 @@ test_that("two-gene blend uses raw double-negative status and named colors", {
   expect_true(all(observed$blend_strength >= 0))
   expect_true(all(observed$blend_strength <= 2))
 
-  legend <- htmltools::renderTags(blend_legend_ui(c("Glul", "EGFP")))$html
+  legend <- htmltools::renderTags(
+    blend_legend_ui(c("Glul", "EGFP"), mode = "expression")
+  )$html
+  for (label in c(
+    "Low Glul + low EGFP",
+    "High Glul",
+    "High EGFP",
+    "High Glul + high EGFP"
+  )) {
+    expect_match(legend, label, fixed = TRUE)
+  }
+  expect_no_match(legend, "detected", fixed = TRUE)
+  expect_match(legend, 'role="list"', fixed = TRUE)
+})
+
+test_that("two-gene detection mode uses four raw-count detection classes", {
+  expect_app_helper("prepare_umap_detection_data")
+  bundle <- synthetic_bundle()
+  gene_data <- prepare_plot_gene_data(bundle, c("Glul", "EGFP"))
+
+  observed <- prepare_umap_detection_data(gene_data)
+  classes <- stats::setNames(observed$blend_class, observed$cell_id)
+
+  expect_identical(classes[["cell_1"]], "Glul detected")
+  expect_identical(classes[["cell_2"]], "EGFP detected")
+  expect_identical(classes[["cell_3"]], "Both detected")
+  expect_identical(classes[["cell_4"]], "Neither detected")
+  expect_identical(classes[["cell_6"]], "EGFP detected")
+  expect_identical(
+    observed$blend_color[observed$cell_id == "cell_2"],
+    observed$blend_color[observed$cell_id == "cell_6"]
+  )
+
+  legend <- htmltools::renderTags(
+    blend_legend_ui(c("Glul", "EGFP"), mode = "detection")
+  )$html
   for (label in c(
     "Neither detected",
     "Glul detected",
@@ -75,10 +116,9 @@ test_that("two-gene blend uses raw double-negative status and named colors", {
   )) {
     expect_match(legend, label, fixed = TRUE)
   }
-  expect_match(legend, 'role="list"', fixed = TRUE)
 })
 
-test_that("interactive and download UMAPs render a two-gene blend", {
+test_that("interactive and download UMAPs separate expression and detection blends", {
   bundle <- synthetic_bundle()
   genes <- c("Glul", "EGFP")
 
@@ -99,7 +139,13 @@ test_that("interactive and download UMAPs render a two-gene blend", {
   expect_setequal(as.character(cell_traces[[1L]]$key), bundle$cells$cell_id)
   expect_identical(anyDuplicated(as.character(cell_traces[[1L]]$key)), 0L)
   expect_false(isTRUE(cell_traces[[1L]]$marker$showscale))
-  expect_true(all(grepl("Raw detected", cell_traces[[1L]]$text, fixed = TRUE)))
+  expected_expression <- prepare_umap_expression_blend_data(
+    prepare_plot_gene_data(bundle, genes)
+  )
+  expect_equal(
+    as.character(cell_traces[[1L]]$marker$color),
+    unname(expected_expression$blend_color)
+  )
 
   download <- make_umap_ggplot(
     bundle = bundle,
@@ -110,8 +156,42 @@ test_that("interactive and download UMAPs render a two-gene blend", {
   expect_s3_class(download, "ggplot")
   built <- ggplot2::ggplot_build(download)
   expect_equal(nrow(built$data[[1L]]), nrow(bundle$cells))
-  expect_match(download$labels$caption, "Neither detected", fixed = TRUE)
-  expect_match(download$labels$caption, "Both detected", fixed = TRUE)
+  expect_match(download$labels$caption, "low both", fixed = TRUE)
+  expect_no_match(download$labels$caption, "detected", fixed = TRUE)
+
+  detection <- plotly::plotly_build(make_umap_plotly(
+    bundle = bundle,
+    color_by = "detection",
+    gene = genes,
+    selected_cell_ids = character(),
+    source = "detection_umap_test"
+  ))
+  detection_trace <- Filter(
+    function(trace) {
+      identical(trace$type, "scattergl") && length(trace$key %||% character()) > 0L
+    },
+    detection$x$data
+  )[[1L]]
+  expected_detection <- prepare_umap_detection_data(
+    prepare_plot_gene_data(bundle, genes)
+  )
+  expect_equal(
+    as.character(detection_trace$marker$color),
+    unname(expected_detection$blend_color)
+  )
+  expect_true(all(grepl("Raw detected", detection_trace$text, fixed = TRUE)))
+
+  detection_download <- make_umap_ggplot(
+    bundle = bundle,
+    color_by = "detection",
+    gene = genes,
+    selected_cell_ids = character()
+  )
+  expect_match(
+    detection_download$labels$caption,
+    "Detection uses raw counts",
+    fixed = TRUE
+  )
 })
 
 test_that("cell-level violins retain PFlog values and selected-cell overlays", {
@@ -494,7 +574,7 @@ test_that("optional second plot gene does not mutate global gene state", {
       title_html <- htmltools::renderTags(output$umap_title)$html
       snapshot_html <- htmltools::renderTags(output$selection_snapshot)$html
       pair_html <- htmltools::renderTags(output$gene_pair_plot_ui)$html
-      expect_match(title_html, "Glul + EGFP blend", fixed = TRUE)
+      expect_match(title_html, "Glul + EGFP expression blend", fixed = TRUE)
       expect_match(snapshot_html, "Glul", fixed = TRUE)
       expect_match(snapshot_html, "EGFP", fixed = TRUE)
       expect_match(
@@ -528,7 +608,14 @@ test_that("optional second plot gene does not mutate global gene state", {
       expect_identical(state$gene_set(), character())
       expect_match(
         htmltools::renderTags(output$umap_title)$html,
-        "Mcm2 + EGFP blend",
+        "Mcm2 + EGFP expression blend",
+        fixed = TRUE
+      )
+
+      session$setInputs(color_by = "detection")
+      expect_match(
+        htmltools::renderTags(output$umap_title)$html,
+        "Mcm2 + EGFP detection",
         fixed = TRUE
       )
     }

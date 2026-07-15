@@ -84,10 +84,10 @@ about_ui <- function(id) {
                 "log1p(4 × alpha × count) is centered by the mean shifted",
                 "log count across all genes in each cell. Values can be",
                 "negative after centering; detection remains count > 0.",
-                "In the two-gene UMAP blend, raw counts define detection and",
-                "color intensity reflects within-gene log normalized expression",
-                "strength among",
-                "detected cells."
+                "For a two-gene expression UMAP, each gene is independently",
+                "scaled across cells before its two colors are blended.",
+                "The separate detection view uses raw counts to distinguish",
+                "neither, either, or both genes detected."
               )
             )
           ),

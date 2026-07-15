@@ -55,21 +55,19 @@ blend_palette <- function() {
   )
 }
 
-scale_detected_strength <- function(values, detected, minimum = 0.28) {
+scale_expression_strength <- function(values) {
   values <- as.numeric(values)
-  detected <- as.logical(detected)
   result <- numeric(length(values))
-  index <- which(detected & is.finite(values))
+  index <- which(is.finite(values))
   if (length(index) == 0L) {
     return(result)
   }
   limits <- range(values[index])
   if (diff(limits) <= .Machine$double.eps^0.5) {
-    result[index] <- 1
+    result[index] <- as.numeric(limits[[1L]] > 0)
     return(result)
   }
-  scaled <- (values[index] - limits[[1L]]) / diff(limits)
-  result[index] <- minimum + (1 - minimum) * pmin(1, pmax(0, scaled))
+  result[index] <- (values[index] - limits[[1L]]) / diff(limits)
   result
 }
 
@@ -100,21 +98,34 @@ blend_rgb <- function(strength_1, strength_2, palette = blend_palette()) {
   toupper(colors)
 }
 
-prepare_umap_blend_data <- function(gene_data) {
+prepare_umap_expression_blend_data <- function(gene_data) {
   genes <- attr(gene_data, "genes")
   if (length(genes) != 2L) {
-    stop("Two plot genes are required for a blended UMAP.", call. = FALSE)
+    stop(
+      "Two plot genes are required for an expression-blended UMAP.",
+      call. = FALSE
+    )
   }
   data <- gene_data
-  data$strength_1 <- scale_detected_strength(
-    data$expression_1,
-    data$detected_1
-  )
-  data$strength_2 <- scale_detected_strength(
-    data$expression_2,
-    data$detected_2
-  )
+  data$strength_1 <- scale_expression_strength(data$expression_1)
+  data$strength_2 <- scale_expression_strength(data$expression_2)
   data$blend_strength <- data$strength_1 + data$strength_2
+  data$blend_color <- blend_rgb(data$strength_1, data$strength_2)
+  data <- data[order(data$blend_strength, data$cell_id), , drop = FALSE]
+  rownames(data) <- NULL
+  attr(data, "genes") <- genes
+  data
+}
+
+prepare_umap_detection_data <- function(gene_data) {
+  genes <- attr(gene_data, "genes")
+  if (length(genes) != 2L) {
+    stop(
+      "Two plot genes are required for a two-gene detection UMAP.",
+      call. = FALSE
+    )
+  }
+  data <- gene_data
   data$blend_class <- ifelse(
     data$detected_1 & data$detected_2,
     "Both detected",
@@ -128,25 +139,50 @@ prepare_umap_blend_data <- function(gene_data) {
       )
     )
   )
-  data$blend_color <- blend_rgb(data$strength_1, data$strength_2)
+  color_key <- ifelse(
+    data$blend_class == "Neither detected",
+    "Neither detected",
+    ifelse(
+      data$blend_class == paste(genes[[1L]], "detected"),
+      "Gene 1",
+      ifelse(
+        data$blend_class == paste(genes[[2L]], "detected"),
+        "Gene 2",
+        "Both detected"
+      )
+    )
+  )
+  data$blend_color <- unname(blend_palette()[color_key])
+  data$blend_strength <- as.integer(data$detected_1) +
+    as.integer(data$detected_2)
   data <- data[order(data$blend_strength, data$cell_id), , drop = FALSE]
   rownames(data) <- NULL
   attr(data, "genes") <- genes
   data
 }
 
-blend_legend_ui <- function(genes) {
+blend_legend_ui <- function(genes, mode = c("expression", "detection")) {
   genes <- compact_character(genes)
   if (length(genes) != 2L) {
     return(NULL)
   }
+  mode <- match.arg(mode)
   palette <- blend_palette()
-  labels <- c(
-    "Neither detected",
-    paste(genes[[1L]], "detected"),
-    paste(genes[[2L]], "detected"),
-    "Both detected"
-  )
+  labels <- if (identical(mode, "expression")) {
+    c(
+      paste("Low", genes[[1L]], "+ low", genes[[2L]]),
+      paste("High", genes[[1L]]),
+      paste("High", genes[[2L]]),
+      paste("High", genes[[1L]], "+ high", genes[[2L]])
+    )
+  } else {
+    c(
+      "Neither detected",
+      paste(genes[[1L]], "detected"),
+      paste(genes[[2L]], "detected"),
+      "Both detected"
+    )
+  }
   colors <- unname(palette[c(
     "Neither detected",
     "Gene 1",
@@ -156,7 +192,12 @@ blend_legend_ui <- function(genes) {
   htmltools::div(
     class = "blend-legend",
     role = "list",
-    `aria-label` = paste("Two-gene expression blend for", paste(genes, collapse = " and ")),
+    `aria-label` = paste(
+      "Two-gene",
+      mode,
+      "blend for",
+      paste(genes, collapse = " and ")
+    ),
     lapply(seq_along(labels), function(index) {
       htmltools::div(
         class = "blend-legend-item",
