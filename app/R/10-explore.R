@@ -2,6 +2,10 @@ explore_ui <- function(id, bundle) {
   ns <- shiny::NS(id)
   preset_choices <- names(bundle$featured_gene_sets)
   cluster_choices <- sort(unique(as.character(bundle$cells$cluster)))
+  gene_pair_group_choices <- c(
+    "All cells" = "all",
+    stats::setNames(cluster_choices, paste("Cluster", cluster_choices))
+  )
 
   bslib::layout_sidebar(
     fillable = FALSE,
@@ -256,19 +260,66 @@ explore_ui <- function(id, bundle) {
             shiny::uiOutput(ns("violin_plot_ui")),
             htmltools::hr(class = "result-divider"),
             htmltools::h3(
-              "Two-gene log normalized expression scatter",
+              "Two-gene log normalized expression",
               class = "result-title"
             ),
-            htmltools::p(
-              paste(
-                "Each point is a cell detected by raw count for at least one gene;",
-                "color identifies its final cluster.",
-                "Larger outlined diamonds are explicitly selected cells.",
-                "Choose a second plot gene in the sidebar to compare two genes;",
-                "hover text reports log normalized expression and raw-count",
-                "detection."
+            htmltools::div(
+              class = "result-toolbar gene-pair-controls",
+              shiny::selectInput(
+                ns("gene_pair_display"),
+                "Display",
+                choices = c(
+                  "Scatter plot" = "scatter",
+                  "Density plot" = "density"
+                ),
+                selected = "scatter",
+                width = "220px"
               ),
-              class = "supporting-copy"
+              shiny::conditionalPanel(
+                condition = "input.gene_pair_display === 'scatter'",
+                ns = ns,
+                shiny::selectInput(
+                  ns("gene_pair_loess_group"),
+                  "Loess trend",
+                  choices = gene_pair_group_choices,
+                  selected = "all",
+                  width = "220px"
+                )
+              ),
+              shiny::conditionalPanel(
+                condition = "input.gene_pair_display === 'density'",
+                ns = ns,
+                shiny::selectInput(
+                  ns("gene_pair_density_group"),
+                  "Density cells",
+                  choices = gene_pair_group_choices,
+                  selected = "all",
+                  width = "220px"
+                )
+              )
+            ),
+            shiny::conditionalPanel(
+              condition = "input.gene_pair_display === 'scatter'",
+              ns = ns,
+              htmltools::p(
+                paste(
+                  "Each point is a cell detected by raw count for at least one gene;",
+                  "color identifies its final cluster.",
+                  "Larger outlined diamonds are explicitly selected cells."
+                ),
+                class = "supporting-copy"
+              )
+            ),
+            shiny::conditionalPanel(
+              condition = "input.gene_pair_display === 'density'",
+              ns = ns,
+              htmltools::p(
+                paste(
+                  "Filled contours show cell density for cells detected by raw",
+                  "count for at least one gene."
+                ),
+                class = "supporting-copy"
+              )
             ),
             shiny::uiOutput(ns("gene_pair_plot_ui"))
           ),
@@ -863,7 +914,7 @@ explore_server <- function(id, bundle, state) {
         return(htmltools::div(
           class = "plot-empty",
           role = "status",
-          "Choose a second plot gene in the sidebar to show the per-cell scatter."
+          "Choose a second plot gene in the sidebar to show the two-gene plot."
         ))
       }
       gene_data <- plot_gene_data()
@@ -875,16 +926,32 @@ explore_server <- function(id, bundle, state) {
           "Neither gene is detected by raw count in any cell."
         ))
       }
+      display <- input$gene_pair_display %||% "scatter"
+      display_label <- if (identical(display, "density")) {
+        "density plot"
+      } else {
+        "scatter"
+      }
+      display_scope <- if (identical(display, "density")) {
+        gene_pair_scope(
+          gene_data,
+          group = input$gene_pair_density_group %||% "all"
+        )
+      } else {
+        scope
+      }
       htmltools::div(
         role = "region",
         `aria-label` = paste(
-          "Per-cell log normalized expression scatter comparing",
+          "Two-gene log normalized expression",
+          display_label,
+          "comparing",
           plot_genes()[[1L]],
           "and",
           plot_genes()[[2L]],
-          "colored by final cluster for cells detected for at least one gene"
+          "for cells detected for at least one gene"
         ),
-        gene_pair_scope_ui(scope),
+        gene_pair_scope_ui(display_scope),
         plotly::plotlyOutput(ns("gene_pair_plot"), height = "540px")
       )
     })
@@ -894,7 +961,10 @@ explore_server <- function(id, bundle, state) {
       make_gene_pair_plotly(
         plot_gene_data(),
         bundle,
-        source = pair_source_id
+        source = pair_source_id,
+        display = input$gene_pair_display %||% "scatter",
+        loess_group = input$gene_pair_loess_group %||% "all",
+        density_group = input$gene_pair_density_group %||% "all"
       )
     })
 

@@ -265,17 +265,29 @@ make_violin_plot <- function(gene_data, bundle) {
     )
 }
 
-gene_pair_scope <- function(gene_data) {
+gene_pair_scope <- function(gene_data, group = "all") {
   genes <- attr(gene_data, "genes")
   if (length(genes) != 2L) {
     return(NULL)
   }
-  included <- as.logical(gene_data$detected_1) |
-    as.logical(gene_data$detected_2)
-  total_n <- nrow(gene_data)
+  group <- compact_character(group)
+  group <- if (length(group) == 0L) "all" else group[[1L]]
+  group_label <- "All cells"
+  group_rows <- rep(TRUE, nrow(gene_data))
+  if (!identical(group, "all")) {
+    group_rows <- as.character(gene_data$cluster) == group
+    group_label <- paste("Cluster", group)
+  }
+  included <- group_rows & (
+    as.logical(gene_data$detected_1) |
+      as.logical(gene_data$detected_2)
+  )
+  total_n <- sum(group_rows)
   included_n <- sum(included)
   list(
     included = included,
+    group = group,
+    group_label = group_label,
     total_n = total_n,
     included_n = included_n,
     excluded_n = total_n - included_n,
@@ -297,13 +309,21 @@ gene_pair_scope_ui <- function(scope) {
     format = "fg"
   ))
   excluded_label <- if (scope$excluded_n == 1L) "cell" else "cells"
+  group_label <- scope$group_label %||% "All cells"
+  group_suffix <- if (identical(group_label, "All cells")) {
+    ""
+  } else {
+    paste0(" in ", group_label)
+  }
   htmltools::p(
     paste0(
       "Showing ",
       format(scope$included_n, big.mark = ","),
       " of ",
       format(scope$total_n, big.mark = ","),
-      " cells detected by raw count for at least one gene. Excluded ",
+      " cells",
+      group_suffix,
+      " detected by raw count for at least one gene. Excluded ",
       format(scope$excluded_n, big.mark = ","),
       " double-negative ",
       excluded_label,
@@ -317,10 +337,261 @@ gene_pair_scope_ui <- function(scope) {
   )
 }
 
-make_gene_pair_plotly <- function(gene_data, bundle, source) {
+gene_pair_group_data <- function(gene_data, group = "all") {
+  scope <- gene_pair_scope(gene_data, group = group)
+  if (is.null(scope)) {
+    return(list(
+      data = gene_data[0L, , drop = FALSE],
+      group = "all",
+      group_label = "All cells"
+    ))
+  }
+  data <- gene_data[scope$included, , drop = FALSE]
+  data <- data[
+    is.finite(data$expression_1) & is.finite(data$expression_2),
+    ,
+    drop = FALSE
+  ]
+  list(
+    data = data,
+    group = scope$group,
+    group_label = scope$group_label
+  )
+}
+
+empty_gene_pair_loess <- function() {
+  data.frame(
+    x = numeric(),
+    fit = numeric(),
+    lower = numeric(),
+    upper = numeric(),
+    group_label = character(),
+    cell_count = integer(),
+    stringsAsFactors = FALSE
+  )
+}
+
+prepare_gene_pair_loess <- function(
+  gene_data,
+  group = "all",
+  span = 0.75,
+  level = 0.95,
+  grid_n = 100L
+) {
+  grouped <- gene_pair_group_data(gene_data, group)
+  data <- grouped$data
+  if (
+    nrow(data) < 8L ||
+      length(unique(data$expression_1)) < 4L ||
+      length(unique(data$expression_2)) < 2L
+  ) {
+    return(empty_gene_pair_loess())
+  }
+  grid_n <- suppressWarnings(as.integer(grid_n[[1L]]))
+  if (is.na(grid_n) || grid_n < 20L) {
+    grid_n <- 100L
+  }
+  model_data <- data.frame(
+    x = as.numeric(data$expression_1),
+    y = as.numeric(data$expression_2)
+  )
+  model <- tryCatch(
+    suppressWarnings(stats::loess(
+      y ~ x,
+      data = model_data,
+      span = span,
+      degree = 2L,
+      control = stats::loess.control(surface = "direct")
+    )),
+    error = function(error) NULL
+  )
+  if (is.null(model)) {
+    return(empty_gene_pair_loess())
+  }
+  x <- seq(min(model_data$x), max(model_data$x), length.out = grid_n)
+  predicted <- tryCatch(
+    suppressWarnings(stats::predict(
+      model,
+      newdata = data.frame(x = x),
+      se = TRUE
+    )),
+    error = function(error) NULL
+  )
+  if (is.null(predicted) || !is.list(predicted)) {
+    return(empty_gene_pair_loess())
+  }
+  degrees_freedom <- as.numeric(predicted$df %||% NA_real_)
+  critical <- if (
+    length(degrees_freedom) == 1L &&
+      is.finite(degrees_freedom) &&
+      degrees_freedom > 0
+  ) {
+    stats::qt((1 + level) / 2, df = degrees_freedom)
+  } else {
+    stats::qnorm((1 + level) / 2)
+  }
+  fit <- as.numeric(predicted$fit)
+  standard_error <- as.numeric(predicted$se.fit)
+  keep <- is.finite(x) & is.finite(fit) & is.finite(standard_error)
+  if (!any(keep)) {
+    return(empty_gene_pair_loess())
+  }
+  data.frame(
+    x = x[keep],
+    fit = fit[keep],
+    lower = fit[keep] - critical * standard_error[keep],
+    upper = fit[keep] + critical * standard_error[keep],
+    group_label = grouped$group_label,
+    cell_count = as.integer(nrow(data)),
+    stringsAsFactors = FALSE
+  )
+}
+
+prepare_gene_pair_density <- function(
+  gene_data,
+  group = "all",
+  grid_n = 80L
+) {
+  grouped <- gene_pair_group_data(gene_data, group)
+  data <- grouped$data
+  if (
+    nrow(data) < 3L ||
+      length(unique(data$expression_1)) < 2L ||
+      length(unique(data$expression_2)) < 2L
+  ) {
+    return(NULL)
+  }
+  grid_n <- suppressWarnings(as.integer(grid_n[[1L]]))
+  if (is.na(grid_n) || grid_n < 20L) {
+    grid_n <- 80L
+  }
+  density <- tryCatch(
+    MASS::kde2d(
+      x = as.numeric(data$expression_1),
+      y = as.numeric(data$expression_2),
+      n = grid_n
+    ),
+    error = function(error) NULL
+  )
+  if (is.null(density) || any(!is.finite(density$z))) {
+    return(NULL)
+  }
+  list(
+    x = density$x,
+    y = density$y,
+    z = density$z,
+    group = grouped$group,
+    group_label = grouped$group_label,
+    cell_count = as.integer(nrow(data))
+  )
+}
+
+plotly_alpha_color <- function(color, alpha) {
+  rgb <- grDevices::col2rgb(color)
+  sprintf(
+    "rgba(%d,%d,%d,%.3f)",
+    rgb[[1L]],
+    rgb[[2L]],
+    rgb[[3L]],
+    alpha
+  )
+}
+
+gene_pair_plotly_layout <- function(plot, genes, legend_title = NULL) {
+  plotly::layout(
+    plot,
+    xaxis = list(
+      title = list(text = paste(genes[[1L]], "log normalized expression")),
+      zeroline = TRUE,
+      zerolinecolor = "#aab2b7"
+    ),
+    yaxis = list(
+      title = list(text = paste(genes[[2L]], "log normalized expression")),
+      zeroline = TRUE,
+      zerolinecolor = "#aab2b7"
+    ),
+    legend = if (is.null(legend_title)) NULL else {
+      list(title = list(text = legend_title))
+    },
+    hovermode = "closest",
+    margin = list(l = 62, r = 20, t = 18, b = 58)
+  )
+}
+
+make_gene_pair_density_plotly <- function(
+  gene_data,
+  source,
+  group = "all"
+) {
+  genes <- attr(gene_data, "genes")
+  density <- prepare_gene_pair_density(gene_data, group = group)
+  if (is.null(density)) {
+    empty <- plotly::plot_ly(
+      x = numeric(),
+      y = numeric(),
+      type = "scatter",
+      mode = "markers",
+      source = source,
+      hoverinfo = "skip",
+      showlegend = FALSE
+    )
+    empty <- gene_pair_plotly_layout(empty, genes)
+    empty <- plotly::layout(
+      empty,
+      annotations = list(list(
+        text = "Density unavailable for this group.",
+        x = 0.5,
+        y = 0.5,
+        xref = "paper",
+        yref = "paper",
+        showarrow = FALSE
+      ))
+    )
+    return(plotly::config(empty, displaylogo = FALSE))
+  }
+  plot <- plotly::plot_ly(
+    x = density$x,
+    y = density$y,
+    z = t(density$z),
+    type = "contour",
+    source = source,
+    name = paste("Density —", density$group_label),
+    colors = c("#f5f2ec", "#d69ab2", "#9d2857", "#17232b"),
+    contours = list(coloring = "heatmap", showlabels = FALSE),
+    colorbar = list(title = list(text = "Cell density")),
+    hovertemplate = paste0(
+      genes[[1L]],
+      ": %{x:.3f}<br>",
+      genes[[2L]],
+      ": %{y:.3f}<br>Density: %{z:.3g}<extra></extra>"
+    )
+  )
+  gene_pair_plotly_layout(plot, genes) |>
+    plotly::config(
+      displaylogo = FALSE,
+      toImageButtonOptions = list(filename = "espiviz-gene-pair-density")
+    )
+}
+
+make_gene_pair_plotly <- function(
+  gene_data,
+  bundle,
+  source,
+  display = c("scatter", "density"),
+  loess_group = "all",
+  density_group = "all"
+) {
   genes <- attr(gene_data, "genes")
   if (length(genes) != 2L) {
     return(NULL)
+  }
+  display <- match.arg(display)
+  if (identical(display, "density")) {
+    return(make_gene_pair_density_plotly(
+      gene_data,
+      source = source,
+      group = density_group
+    ))
   }
   scope <- gene_pair_scope(gene_data)
   data <- gene_data[scope$included, , drop = FALSE]
@@ -330,6 +601,32 @@ make_gene_pair_plotly <- function(gene_data, bundle, source) {
   clusters <- sort(unique(as.character(data$cluster)))
   palette <- discrete_palette(bundle, "cluster", clusters)
   plot <- plotly::plot_ly(source = source)
+  trend <- prepare_gene_pair_loess(gene_data, group = loess_group)
+  trend_color <- if (identical(loess_group, "all")) {
+    "#17232b"
+  } else {
+    candidate <- unname(palette[as.character(loess_group)])
+    if (length(candidate) == 1L && !is.na(candidate) && nzchar(candidate)) {
+      candidate
+    } else {
+      "#17232b"
+    }
+  }
+  if (nrow(trend) > 0L) {
+    plot <- plotly::add_ribbons(
+      plot,
+      data = trend,
+      x = ~x,
+      ymin = ~lower,
+      ymax = ~upper,
+      name = "95% confidence ribbon",
+      fillcolor = plotly_alpha_color(trend_color, 0.18),
+      line = list(color = "transparent"),
+      hoverinfo = "skip",
+      showlegend = FALSE,
+      inherit = FALSE
+    )
+  }
   for (cluster in clusters) {
     trace_data <- data[as.character(data$cluster) == cluster, , drop = FALSE]
     hover <- paste0(
@@ -377,26 +674,56 @@ make_gene_pair_plotly <- function(gene_data, bundle, source) {
       showlegend = TRUE
     )
   }
-  plot |>
-    plotly::layout(
-      xaxis = list(
-        title = list(text = paste(genes[[1L]], "log normalized expression")),
-        zeroline = TRUE,
-        zerolinecolor = "#aab2b7"
+  if (nrow(trend) > 0L) {
+    plot <- plotly::add_lines(
+      plot,
+      data = trend,
+      x = ~x,
+      y = ~fit,
+      name = paste("Loess trend —", trend$group_label[[1L]]),
+      line = list(color = trend_color, width = 3),
+      hovertemplate = paste0(
+        "Loess trend — ",
+        trend$group_label[[1L]],
+        "<br>",
+        genes[[1L]],
+        ": %{x:.3f}<br>",
+        genes[[2L]],
+        ": %{y:.3f}<extra></extra>"
       ),
-      yaxis = list(
-        title = list(text = paste(genes[[2L]], "log normalized expression")),
-        zeroline = TRUE,
-        zerolinecolor = "#aab2b7"
-      ),
-      legend = list(title = list(text = "Final cluster")),
-      hovermode = "closest",
-      margin = list(l = 62, r = 20, t = 18, b = 58)
-    ) |>
-    plotly::config(
-      displaylogo = FALSE,
-      toImageButtonOptions = list(filename = "espiviz-gene-pair-pflog")
+      inherit = FALSE,
+      showlegend = FALSE
     )
+  }
+  plot <- gene_pair_plotly_layout(
+    plot,
+    genes,
+    legend_title = "Final cluster"
+  )
+  if (nrow(trend) == 0L) {
+    trend_group <- gene_pair_group_data(gene_data, group = loess_group)
+    plot <- plotly::layout(
+      plot,
+      annotations = list(list(
+        text = paste(
+          "Loess trend unavailable for",
+          paste0(trend_group$group_label, ".")
+        ),
+        x = 0.5,
+        y = 1,
+        xref = "paper",
+        yref = "paper",
+        xanchor = "center",
+        yanchor = "top",
+        showarrow = FALSE
+      ))
+    )
+  }
+  plotly::config(
+    plot,
+    displaylogo = FALSE,
+    toImageButtonOptions = list(filename = "espiviz-gene-pair-pflog")
+  )
 }
 
 prepare_selection_snapshot <- function(gene_data) {

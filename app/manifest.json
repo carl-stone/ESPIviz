@@ -37,6 +37,36 @@
         "Built": "R 4.6.0; ; 2026-04-25 12:39:06 UTC; unix"
       }
     },
+    "MASS": {
+      "Source": "CRAN",
+      "Repository": "https://cloud.r-project.org",
+      "description": {
+        "Package": "MASS",
+        "Priority": "recommended",
+        "Version": "7.3-65",
+        "Date": "2025-02-19",
+        "Revision": "$Rev: 3681 $",
+        "Depends": "R (>= 4.4.0), grDevices, graphics, stats, utils",
+        "Imports": "methods",
+        "Suggests": "lattice, nlme, nnet, survival",
+        "Authors@R": "c(person(\"Brian\", \"Ripley\", role = c(\"aut\", \"cre\", \"cph\"),\n                    email = \"Brian.Ripley@R-project.org\"),\n\t     person(\"Bill\", \"Venables\", role = c(\"aut\", \"cph\")),\n\t     person(c(\"Douglas\", \"M.\"), \"Bates\", role = \"ctb\"),\n\t     person(\"Kurt\", \"Hornik\", role = \"trl\",\n                     comment = \"partial port ca 1998\"),\n\t     person(\"Albrecht\", \"Gebhardt\", role = \"trl\",\n                     comment = \"partial port ca 1998\"),\n\t     person(\"David\", \"Firth\", role = \"ctb\",\n\t            comment = \"support functions for polr\"))",
+        "Description": "Functions and datasets to support Venables and Ripley,\n  \"Modern Applied Statistics with S\" (4th edition, 2002).",
+        "Title": "Support Functions and Datasets for Venables and Ripley's MASS",
+        "LazyData": "yes",
+        "ByteCompile": "yes",
+        "License": "GPL-2 | GPL-3",
+        "URL": "http://www.stats.ox.ac.uk/pub/MASS4/",
+        "Contact": "<MASS@stats.ox.ac.uk>",
+        "NeedsCompilation": "yes",
+        "Packaged": "2025-02-19 08:49:43 UTC; ripley",
+        "Author": "Brian Ripley [aut, cre, cph],\n  Bill Venables [aut, cph],\n  Douglas M. Bates [ctb],\n  Kurt Hornik [trl] (partial port ca 1998),\n  Albrecht Gebhardt [trl] (partial port ca 1998),\n  David Firth [ctb] (support functions for polr)",
+        "Maintainer": "Brian Ripley <Brian.Ripley@R-project.org>",
+        "Repository": "CRAN",
+        "Date/Publication": "2025-02-28 17:44:52 UTC",
+        "Built": "R 4.6.0; aarch64-apple-darwin23; 2026-04-25 15:41:54 UTC; unix",
+        "Archs": "MASS.so.dSYM"
+      }
+    },
     "Matrix": {
       "Source": "CRAN",
       "Repository": "https://cloud.r-project.org",
@@ -2475,10 +2505,10 @@
       "checksum": "e5869d6800dfda75843435a661e71d30"
     },
     "R/04-cell-level.R": {
-      "checksum": "825e75b0b452bcdbeee0b8dd51f76231"
+      "checksum": "f99f2704dcaa2bdce42024894fd244ae"
     },
     "R/10-explore.R": {
-      "checksum": "75361e855305e8e365ded74d43f4628c"
+      "checksum": "0d061a69e76a0c17b0f6452e42e2d0ee"
     },
     "R/20-differential-expression.R": {
       "checksum": "e501715d85e3b313dc13c36e63d18138"

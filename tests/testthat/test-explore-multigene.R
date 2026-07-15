@@ -205,8 +205,154 @@ test_that("two-gene PFlog scatter excludes double-negative cells", {
   expect_match(scope_html, "Showing 5 of 6 cells", fixed = TRUE)
   expect_match(scope_html, "artificial diagonal", fixed = TRUE)
 
+  cluster_scope <- gene_pair_scope(gene_data, group = "1")
+  cluster_scope_html <- htmltools::renderTags(
+    gene_pair_scope_ui(cluster_scope)
+  )$html
+  expect_match(
+    cluster_scope_html,
+    "Showing 1 of 2 cells in Cluster 1",
+    fixed = TRUE
+  )
+
   single <- prepare_plot_gene_data(bundle, "Glul")
   expect_null(make_gene_pair_plotly(single, bundle, "single_gene_test"))
+})
+
+test_that("gene-pair loess trends use all included cells or one cluster", {
+  expect_app_helper("prepare_gene_pair_loess")
+  x <- seq(-2, 2, length.out = 60L)
+  gene_data <- data.frame(
+    cell_id = paste0("cell_", seq_along(x)),
+    cluster = rep(c("0", "1"), each = 30L),
+    expression_1 = x,
+    expression_2 = 0.5 * x + sin(x) + rep(c(-0.1, 0.1), each = 30L),
+    detected_1 = TRUE,
+    detected_2 = TRUE,
+    selected = FALSE,
+    stringsAsFactors = FALSE
+  )
+  attr(gene_data, "genes") <- c("GeneA", "GeneB")
+
+  all_cells <- prepare_gene_pair_loess(gene_data, group = "all")
+  cluster_one <- prepare_gene_pair_loess(gene_data, group = "1")
+
+  expect_identical(all_cells$group_label[[1L]], "All cells")
+  expect_identical(unique(all_cells$cell_count), 60L)
+  expect_identical(cluster_one$group_label[[1L]], "Cluster 1")
+  expect_identical(unique(cluster_one$cell_count), 30L)
+  expect_true(all(c("x", "fit", "lower", "upper") %in% names(all_cells)))
+  expect_true(all(is.finite(all_cells$x)))
+  expect_true(all(is.finite(all_cells$fit)))
+  expect_true(all(all_cells$lower <= all_cells$fit))
+  expect_true(all(all_cells$fit <= all_cells$upper))
+})
+
+test_that("gene-pair density prepares one smooth grid for the requested cells", {
+  expect_app_helper("prepare_gene_pair_density")
+  set.seed(1L)
+  x <- seq(-2, 2, length.out = 60L)
+  gene_data <- data.frame(
+    cell_id = paste0("cell_", seq_along(x)),
+    cluster = rep(c("0", "1"), each = 30L),
+    expression_1 = x,
+    expression_2 = x^2 + stats::rnorm(length(x), sd = 0.1),
+    detected_1 = TRUE,
+    detected_2 = TRUE,
+    selected = FALSE,
+    stringsAsFactors = FALSE
+  )
+  attr(gene_data, "genes") <- c("GeneA", "GeneB")
+
+  observed <- prepare_gene_pair_density(gene_data, group = "0", grid_n = 40L)
+
+  expect_identical(observed$group_label, "Cluster 0")
+  expect_identical(observed$cell_count, 30L)
+  expect_length(observed$x, 40L)
+  expect_length(observed$y, 40L)
+  expect_identical(dim(observed$z), c(40L, 40L))
+  expect_true(all(is.finite(observed$z)))
+  expect_true(all(observed$z >= 0))
+})
+
+test_that("gene-pair display switches between scatter and density traces", {
+  x <- seq(-2, 2, length.out = 60L)
+  gene_data <- data.frame(
+    cell_id = paste0("cell_", seq_along(x)),
+    cluster = rep(c("0", "1"), each = 30L),
+    expression_1 = x,
+    expression_2 = 0.5 * x + sin(x),
+    detected_1 = TRUE,
+    detected_2 = TRUE,
+    selected = FALSE,
+    stringsAsFactors = FALSE
+  )
+  attr(gene_data, "genes") <- c("GeneA", "GeneB")
+  bundle <- synthetic_bundle()
+
+  scatter <- plotly::plotly_build(make_gene_pair_plotly(
+    gene_data,
+    bundle,
+    source = "pair_scatter_options_test",
+    display = "scatter",
+    loess_group = "all"
+  ))
+  density <- plotly::plotly_build(make_gene_pair_plotly(
+    gene_data,
+    bundle,
+    source = "pair_density_options_test",
+    display = "density",
+    density_group = "all"
+  ))
+  scatter_names <- vapply(
+    scatter$x$data,
+    function(trace) trace$name %||% "",
+    character(1L)
+  )
+
+  expect_true(any(vapply(scatter$x$data, function(trace) {
+    identical(trace$type, "scattergl")
+  }, logical(1L))))
+  expect_true(any(grepl("Loess trend", scatter_names, fixed = TRUE)))
+  expect_true(any(grepl("95% confidence ribbon", scatter_names, fixed = TRUE)))
+  expect_false(any(vapply(density$x$data, function(trace) {
+    identical(trace$type, "scattergl")
+  }, logical(1L))))
+  expect_true(any(vapply(density$x$data, function(trace) {
+    identical(trace$type, "contour")
+  }, logical(1L))))
+  expect_s3_class(
+    make_gene_pair_plotly(
+      gene_data,
+      bundle,
+      source = "pair_missing_cluster_test",
+      display = "scatter",
+      loess_group = "missing"
+    ),
+    "plotly"
+  )
+  expect_s3_class(
+    make_gene_pair_plotly(
+      gene_data,
+      bundle,
+      source = "density_missing_cluster_test",
+      display = "density",
+      density_group = "missing"
+    ),
+    "plotly"
+  )
+  missing_trend <- plotly::plotly_build(make_gene_pair_plotly(
+    gene_data,
+    bundle,
+    source = "pair_missing_cluster_annotation_test",
+    display = "scatter",
+    loess_group = "missing"
+  ))
+  expect_match(
+    missing_trend$x$layout$annotations[[1L]]$text,
+    "Loess trend unavailable for Cluster missing.",
+    fixed = TRUE
+  )
 })
 
 test_that("selection snapshot is compact and uses raw-count detection", {
@@ -308,7 +454,7 @@ test_that("Explore exposes a compact two-gene cell-level workflow", {
     "Selected-cell summary",
     "Cell-level",
     "Log normalized expression distribution by final cluster",
-    "Two-gene log normalized expression scatter"
+    "Two-gene log normalized expression"
   )) {
     expect_match(html, label, fixed = TRUE)
   }
@@ -317,9 +463,15 @@ test_that("Explore exposes a compact two-gene cell-level workflow", {
     "selection_snapshot",
     "umap_legend",
     "violin_plot_ui",
+    "gene_pair_display",
+    "gene_pair_loess_group",
+    "gene_pair_density_group",
     "gene_pair_plot_ui"
   )) {
     expect_match(html, paste0("explore_test-", id), fixed = TRUE)
+  }
+  for (label in c("Display", "Scatter plot", "Density plot", "Loess trend")) {
+    expect_match(html, label, fixed = TRUE)
   }
   expect_match(html, 'class="umap-side-rail"', fixed = TRUE)
 })
@@ -348,13 +500,28 @@ test_that("optional second plot gene does not mutate global gene state", {
       expect_match(
         pair_html,
         paste(
-          "Per-cell log normalized expression scatter comparing Glul and",
-          "EGFP colored by final",
-          "cluster for cells detected for at least one gene"
+          "Two-gene log normalized expression scatter comparing Glul and EGFP",
+          "for cells detected for at least one gene"
         ),
         fixed = TRUE
       )
       expect_match(pair_html, "Excluded 1 double-negative cell", fixed = TRUE)
+
+      session$setInputs(
+        gene_pair_display = "density",
+        gene_pair_density_group = "1"
+      )
+      density_html <- htmltools::renderTags(output$gene_pair_plot_ui)$html
+      expect_match(
+        density_html,
+        "Two-gene log normalized expression density plot comparing",
+        fixed = TRUE
+      )
+      expect_match(
+        density_html,
+        "Showing 1 of 2 cells in Cluster 1",
+        fixed = TRUE
+      )
 
       session$setInputs(active_gene = "Mcm2")
       expect_identical(state$active_gene(), "Mcm2")
