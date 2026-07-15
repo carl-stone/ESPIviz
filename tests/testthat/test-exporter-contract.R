@@ -79,7 +79,7 @@ test_that("exporter pins the frozen structural source contract", {
   expect_identical(contract$clusters, as.character(1:8))
   expect_identical(contract$primary_de_rows, 24601L)
   expect_identical(contract$primary_de_design, "primary_unpaired_condition")
-  expect_identical(contract$data_version, "1.1.0")
+  expect_identical(contract$data_version, "1.1.1")
 })
 
 test_that("source-manifest example requires one complete source hash", {

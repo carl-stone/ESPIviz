@@ -18,7 +18,7 @@ espiviz_require <- function(package) {
 espiviz_contract <- function() {
   list(
     schema_version = "1.0.0",
-    data_version = "1.1.0",
+    data_version = "1.1.1",
     reduction = "umap_pflog_mg_selected_no_filter_cc_dims20",
     cluster_column = "cluster_pflog_mg_selected_no_filter_cc_dims20_res0.5",
     genes = 38394L,

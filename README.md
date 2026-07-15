@@ -78,7 +78,7 @@ before building data. `just data-dry-run` validates those inputs without writing
 a bundle. To run against a local bundle:
 
 ```sh
-just app-run /absolute/path/to/espiviz-data-v1.1.0.rds
+just app-run /absolute/path/to/espiviz-data-v1.1.1.rds
 ```
 
 `just manifest` scans `app/` only, keeping Seurat, `scclrR`, and other exporter

@@ -52,7 +52,7 @@ espiviz_cli_help <- function() {
       "    [--public-manifest PATH --asset-url HTTPS_URL]\n\n",
       "Options:\n",
       "  --manifest PATH         Gitignored local source manifest.\n",
-      "  --output PATH           Output espiviz-data-v1.1.0.rds path.\n",
+      "  --output PATH           Output espiviz-data-v1.1.1.rds path.\n",
       "  --dry-run               Validate and build in memory without writing.\n",
       "  --overwrite             Replace existing output files.\n",
       "  --public-manifest PATH  Write the small deploy-time JSON manifest.\n",
