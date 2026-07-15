@@ -2490,34 +2490,34 @@
       "checksum": "6c366cc08cb79833350267fc5fad3e52"
     },
     "data-manifest.json": {
-      "checksum": "a993d28efae2ce5a83e573a5b486a1ee"
+      "checksum": "3542f01cc8aa2381083a7c65de19dcf7"
     },
     "R/00-utils.R": {
       "checksum": "e1e4673a72f96d1c0b27735df508e1b5"
     },
     "R/01-bundle.R": {
-      "checksum": "d0fb74a1edb44387970b87ab0d6ed12d"
+      "checksum": "10e41354842078ee92cc5459760ac2b3"
     },
     "R/02-expression.R": {
       "checksum": "eca3c3eb1f71b5c8af77e7a29471f89f"
     },
     "R/03-state-plots.R": {
-      "checksum": "e5869d6800dfda75843435a661e71d30"
+      "checksum": "bcca28313ba7611084a8a3c2979acfe8"
     },
     "R/04-cell-level.R": {
-      "checksum": "f99f2704dcaa2bdce42024894fd244ae"
+      "checksum": "576e0e3c729eb5a8f4c952277ded6a13"
     },
     "R/10-explore.R": {
-      "checksum": "08990bbabaa65bbbaa981b04191de7f6"
+      "checksum": "778df009b2bf0bfd69d277fb8014d778"
     },
     "R/20-differential-expression.R": {
       "checksum": "e501715d85e3b313dc13c36e63d18138"
     },
     "R/30-pathways.R": {
-      "checksum": "15c761dd16adb50cbb6303ca7a441f8c"
+      "checksum": "ef62feaf5edd3303516a9e1f303da51e"
     },
     "R/40-about.R": {
-      "checksum": "25e31473ad8e231f5881e751dfa8e758"
+      "checksum": "9bd0d5ccc2a4fc02fa595063ce972c79"
     },
     "R/90-app-shell.R": {
       "checksum": "282caaa20aff4c841558bbf447d0c0ce"

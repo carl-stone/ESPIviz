@@ -159,7 +159,7 @@ test_that("bundle validation rejects schema and primary-result drift", {
   )
 })
 
-test_that("bundle validation rejects unusable featured pathway tables", {
+test_that("bundle validation accepts repeated labels but requires unique rows", {
   expect_app_helper("validate_bundle")
   bundle <- synthetic_bundle()
   expected <- synthetic_expectations(bundle)
@@ -169,7 +169,7 @@ test_that("bundle validation rejects unusable featured pathway tables", {
   empty_pathways$pathway_genes <- empty_pathways$pathway_genes[0, , drop = FALSE]
   expect_error(
     validate_bundle(empty_pathways, expected = expected),
-    "featured pathway tables",
+    "enrichment result tables",
     fixed = TRUE
   )
 
@@ -178,18 +178,14 @@ test_that("bundle validation rejects unusable featured pathway tables", {
     duplicate_pathways$pathways$pathway_id[[1L]]
   expect_error(
     validate_bundle(duplicate_pathways, expected = expected),
-    "featured pathway tables",
+    "enrichment result tables",
     fixed = TRUE
   )
 
   duplicate_labels <- bundle
   duplicate_labels$pathways$label[[2L]] <-
     duplicate_labels$pathways$label[[1L]]
-  expect_error(
-    validate_bundle(duplicate_labels, expected = expected),
-    "featured pathway tables",
-    fixed = TRUE
-  )
+  expect_silent(validate_bundle(duplicate_labels, expected = expected))
 })
 
 test_that("bundle loading verifies the asset checksum", {
