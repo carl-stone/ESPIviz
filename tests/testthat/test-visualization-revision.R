@@ -481,3 +481,43 @@ test_that("pathway plots use the top ten results per method and direction", {
   expect_true(all(observed$p_adjust <= 0.5))
   expect_true(any(observed$p_adjust >= 0.05))
 })
+
+test_that("pathway plots add an active result outside the top ten", {
+  expect_app_helper("displayed_pathway_results")
+  pathways <- do.call(rbind, lapply(c("GSEA", "ORA"), function(source) {
+    do.call(rbind, lapply(c("Control", "E-Stim"), function(direction) {
+      index <- seq_len(11L)
+      data.frame(
+        pathway_id = paste(tolower(source), direction, index, sep = "_"),
+        label = paste(source, direction, index),
+        source = source,
+        direction = direction,
+        description = paste(source, direction, index),
+        p_value = index / 100,
+        p_adjust = index / 20,
+        score = if (identical(source, "GSEA")) index else index + 1,
+        gene_count = index,
+        stringsAsFactors = FALSE
+      )
+    }))
+  }))
+  active_pathway <- "gsea_Control_11"
+
+  displayed <- displayed_pathway_results(pathways, active_pathway)
+  interactive <- make_pathway_plotly(
+    displayed,
+    active_pathway,
+    "active_pathway_test"
+  ) |>
+    plotly::plotly_build()
+  keys <- unlist(lapply(interactive$x$data, function(trace) {
+    as.character(trace$key %||% character())
+  }), use.names = FALSE)
+  outline_widths <- unlist(lapply(interactive$x$data, function(trace) {
+    trace$marker$line$width %||% numeric()
+  }), use.names = FALSE)
+
+  expect_equal(nrow(displayed), 41L)
+  expect_identical(sum(displayed$pathway_id == active_pathway), 1L)
+  expect_equal(outline_widths[match(active_pathway, keys)], 3)
+})

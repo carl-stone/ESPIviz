@@ -651,3 +651,36 @@ test_that("manual plot-gene pairs populate every expression summary", {
     }
   )
 })
+
+test_that("cell selections reuse prepared violin expression data", {
+  bundle <- synthetic_bundle()
+  state <- new_app_state(bundle)
+  calls <- new.env(parent = emptyenv())
+  calls$count <- 0L
+  original_prepare <- prepare_summary_violin_data
+  rlang::local_bindings(
+    prepare_summary_violin_data = function(...) {
+      calls$count <- calls$count + 1L
+      original_prepare(...)
+    },
+    .env = environment(explore_server)
+  )
+
+  shiny::testServer(
+    explore_server,
+    args = list(bundle = bundle, state = state),
+    {
+      initial <- page_violin_data()
+      initial_calls <- calls$count
+
+      state$selected_cells(bundle$cells$cell_id[[1L]])
+      session$flushReact()
+      selected <- page_violin_data()
+
+      expect_gt(initial_calls, 0L)
+      expect_identical(calls$count, initial_calls)
+      expect_false(any(initial$selected))
+      expect_identical(sum(selected$selected), length(unique(selected$gene)))
+    }
+  )
+})

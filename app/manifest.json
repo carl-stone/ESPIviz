@@ -2502,22 +2502,22 @@
       "checksum": "eca3c3eb1f71b5c8af77e7a29471f89f"
     },
     "R/03-state-plots.R": {
-      "checksum": "bcca28313ba7611084a8a3c2979acfe8"
+      "checksum": "99c7084847fdc868abe781a8fb54c3b0"
     },
     "R/04-cell-level.R": {
       "checksum": "576e0e3c729eb5a8f4c952277ded6a13"
     },
     "R/10-explore.R": {
-      "checksum": "778df009b2bf0bfd69d277fb8014d778"
+      "checksum": "e36c640b9047c84df36b486d23312e53"
     },
     "R/20-differential-expression.R": {
       "checksum": "e501715d85e3b313dc13c36e63d18138"
     },
     "R/30-pathways.R": {
-      "checksum": "ef62feaf5edd3303516a9e1f303da51e"
+      "checksum": "3dff5eb48c7a9b85d9e9bef309720a51"
     },
     "R/40-about.R": {
-      "checksum": "9bd0d5ccc2a4fc02fa595063ce972c79"
+      "checksum": "2a66c93575082a112a878b72bf5f8bb0"
     },
     "R/90-app-shell.R": {
       "checksum": "282caaa20aff4c841558bbf447d0c0ce"

@@ -59,7 +59,12 @@ about_ui <- function(id) {
           "The experiment compares p27CKO retinal cells with p27CKO cells collected after electrical stimulation. The final explorer contains 3,456 cells across eight clusters."
         ),
         htmltools::p(
-          "Use Explore to inspect genes and cell selections, Differential expression to search the primary condition model, and Pathways to open the featured manuscript-aligned gene sets."
+          paste(
+            "Use Explore to inspect genes and cell selections, Differential",
+            "expression to search the primary condition model, and Pathways",
+            "to search the complete Gene Ontology Biological Process",
+            "enrichment results."
+          )
         )
       ),
       bslib::card(
