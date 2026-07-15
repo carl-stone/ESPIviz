@@ -43,11 +43,11 @@ about_ui <- function(id) {
         "Electrical stimulation combined with p27Kip1 inactivation drives proliferative neurogenic reprogramming of Müller glia in the adult mouse retina"
       ),
       htmltools::p(
-        "ESPIviz is the interactive companion to the study's final single-cell RNA-seq analysis.",
+        "ESPIviz is an interactive companion to the study's single-cell RNA-seq analysis.",
         class = "lede"
       ),
       htmltools::p(
-        "ESPIviz — analysis and application by Carl Stone.",
+        "ESPIviz application by Carl Stone.",
         class = "credit-line"
       )
     ),
