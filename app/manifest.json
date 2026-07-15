@@ -2502,13 +2502,13 @@
       "checksum": "eca3c3eb1f71b5c8af77e7a29471f89f"
     },
     "R/03-state-plots.R": {
-      "checksum": "9644f776461b2d9d8cff7e7695408b67"
+      "checksum": "99c7084847fdc868abe781a8fb54c3b0"
     },
     "R/04-cell-level.R": {
       "checksum": "576e0e3c729eb5a8f4c952277ded6a13"
     },
     "R/10-explore.R": {
-      "checksum": "dcd3a6398f5fe66475b0f87235d9d81a"
+      "checksum": "e36c640b9047c84df36b486d23312e53"
     },
     "R/20-differential-expression.R": {
       "checksum": "e501715d85e3b313dc13c36e63d18138"

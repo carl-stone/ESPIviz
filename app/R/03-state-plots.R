@@ -688,12 +688,17 @@ summary_violin_plot_data <- function(data, group_by) {
 
   has_selection <- any(data$selected)
   if (identical(group_by, "comparison")) {
-    groups <- if (has_selection && !all(data$selected)) {
+    has_partial_selection <- has_selection && !all(data$selected)
+    groups <- if (has_partial_selection) {
       ifelse(data$selected, "Selected cells", "Remaining cells")
     } else {
       rep("All cells", nrow(data))
     }
-    group_levels <- c("All cells", "Selected cells", "Remaining cells")
+    group_levels <- if (has_partial_selection) {
+      c("Selected cells", "Remaining cells")
+    } else {
+      "All cells"
+    }
   } else {
     if (has_selection) {
       data <- data[data$selected, , drop = FALSE]
@@ -773,7 +778,6 @@ make_summary_violin_plot <- function(
       data = violin_data,
       scale = "width",
       trim = FALSE,
-      drop = FALSE,
       linewidth = 0.3,
       color = "#42515a",
       alpha = 0.72,

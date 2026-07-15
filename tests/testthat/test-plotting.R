@@ -36,6 +36,7 @@ test_that("summary violin data preserves expression and selection grouping", {
   all_cells <- prepare_summary_violin_data(bundle, "Glul")
   all_comparison <- summary_violin_plot_data(all_cells, "comparison")
   expect_identical(unique(as.character(all_comparison$group)), "All cells")
+  expect_identical(levels(all_comparison$group), "All cells")
   expect_equal(
     nrow(summary_violin_plot_data(all_cells, "condition")),
     nrow(bundle$cells)

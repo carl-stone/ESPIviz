@@ -614,6 +614,11 @@ explore_server <- function(id, bundle, state) {
       )
     })
 
+    expression_summary_genes <- shiny::reactive({
+      genes <- c(plot_genes(), state$gene_set())
+      genes[!duplicated(casefold_key(genes))]
+    })
+
     plot_gene_data <- shiny::reactive({
       prepare_plot_gene_data(
         bundle,
@@ -794,7 +799,7 @@ explore_server <- function(id, bundle, state) {
 
     selection_summary <- shiny::reactive({
       visible_genes <- paginate_genes(
-        analysis_genes(),
+        expression_summary_genes(),
         input$gene_page %||% 1L,
         25L
       )$genes
@@ -829,15 +834,24 @@ explore_server <- function(id, bundle, state) {
     })
 
     page_info <- shiny::reactive({
-      paginate_genes(analysis_genes(), input$gene_page %||% 1L, 25L)
+      paginate_genes(
+        expression_summary_genes(),
+        input$gene_page %||% 1L,
+        25L
+      )
+    })
+
+    page_violin_expression_data <- shiny::reactive({
+      prepare_summary_violin_data(
+        bundle,
+        page_info()$genes
+      )
     })
 
     page_violin_data <- shiny::reactive({
-      prepare_summary_violin_data(
-        bundle,
-        page_info()$genes,
-        state$selected_cells()
-      )
+      data <- page_violin_expression_data()
+      data$selected <- data$cell_id %in% as.character(state$selected_cells())
+      data
     })
 
     is_dot_summary_plot <- function(plot_type) {

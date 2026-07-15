@@ -621,3 +621,66 @@ test_that("optional second plot gene does not mutate global gene state", {
     }
   )
 })
+
+test_that("manual plot-gene pairs populate every expression summary", {
+  bundle <- synthetic_bundle()
+  state <- new_app_state(bundle)
+
+  shiny::testServer(
+    explore_server,
+    args = list(bundle = bundle, state = state),
+    {
+      expect_expression_summary_genes <- function(expected) {
+        expect_identical(page_info()$genes, expected)
+        expect_identical(page_comparison()$gene, expected)
+        expect_setequal(unique(sample_page_summary()$gene), expected)
+        expect_setequal(unique(condition_page_summary()$gene), expected)
+        expect_setequal(unique(cluster_page_summary()$gene), expected)
+      }
+
+      session$setInputs(
+        active_gene = "Glul",
+        secondary_gene = "EGFP"
+      )
+
+      expect_expression_summary_genes(c("Glul", "EGFP"))
+
+      state$gene_set(c("Mcm2", "Other"))
+      session$flushReact()
+      expect_expression_summary_genes(c("Glul", "EGFP", "Mcm2", "Other"))
+    }
+  )
+})
+
+test_that("cell selections reuse prepared violin expression data", {
+  bundle <- synthetic_bundle()
+  state <- new_app_state(bundle)
+  calls <- new.env(parent = emptyenv())
+  calls$count <- 0L
+  original_prepare <- prepare_summary_violin_data
+  rlang::local_bindings(
+    prepare_summary_violin_data = function(...) {
+      calls$count <- calls$count + 1L
+      original_prepare(...)
+    },
+    .env = environment(explore_server)
+  )
+
+  shiny::testServer(
+    explore_server,
+    args = list(bundle = bundle, state = state),
+    {
+      initial <- page_violin_data()
+      initial_calls <- calls$count
+
+      state$selected_cells(bundle$cells$cell_id[[1L]])
+      session$flushReact()
+      selected <- page_violin_data()
+
+      expect_gt(initial_calls, 0L)
+      expect_identical(calls$count, initial_calls)
+      expect_false(any(initial$selected))
+      expect_identical(sum(selected$selected), length(unique(selected$gene)))
+    }
+  )
+})
