@@ -24,8 +24,9 @@ it must read every source path from the local source manifest.
 - Prefer explicit package namespaces.
 - Keep pure data-contract and summary functions under `app/R/` so tests can
   source them without starting Shiny.
-- Derive normalized expression as
-  `log1p(10000 * count / cell_library_size)`.
+- Derive normalized expression with scclrR PFlog using `target = "auto"`,
+  `log1p = TRUE`, and `center = TRUE`. Keep its sparse shifted-log matrix and
+  per-cell centering vector separate when exporting large selections.
 - Leave ratios missing when their denominator is zero.
 
 Run `just test` after code changes. Run `just manifest` only from `app/`; do not

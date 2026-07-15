@@ -23,6 +23,9 @@ Suggests:
     AnnotationDbi,
     org.Mm.eg.db,
     rsconnect,
+    scclrR,
     SeuratObject,
     testthat (>= 3.0.0)
+Remotes:
+    cleartools/scclrR@6d6378dd41502a8606da14adb01a01032cb75224
 Config/testthat/edition: 3

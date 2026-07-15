@@ -34,12 +34,6 @@ make_synthetic_seurat_source <- function() {
   )
   dimnames(counts) <- list(c("Glul", "EGFP", "Other"), paste0("barcode_", 1:4))
   object <- SeuratObject::CreateSeuratObject(counts = counts)
-  normalized <- log1p(
-    sweep(as.matrix(counts), 2L, Matrix::colSums(counts), "/") * 10000
-  )
-  normalized <- Matrix::Matrix(normalized, sparse = TRUE)
-  dimnames(normalized) <- dimnames(counts)
-  SeuratObject::LayerData(object[["RNA"]], layer = "data") <- normalized
 
   embeddings <- matrix(seq_len(8L), ncol = 2L)
   rownames(embeddings) <- colnames(counts)
@@ -184,27 +178,118 @@ test_that("public-bundle validator rejects alternate DE surfaces and schemas", {
     "missing required columns",
     ignore.case = TRUE
   )
+
+  missing_base_mean <- bundle
+  missing_base_mean$primary_de$baseMean <- NULL
+  expect_error(
+    validate_public_bundle(missing_base_mean, enforce_frozen = FALSE),
+    "missing required columns",
+    ignore.case = TRUE
+  )
+
+  invalid_base_mean <- bundle
+  invalid_base_mean$primary_de$baseMean[[1L]] <- -1
+  expect_error(
+    validate_public_bundle(invalid_base_mean, enforce_frozen = FALSE),
+    "baseMean",
+    fixed = TRUE
+  )
 })
 
-test_that("exporter normalization check verifies source data-layer identity", {
+test_that("public-bundle validator requires usable featured pathways", {
+  bundle <- synthetic_bundle()
+
+  empty_pathways <- bundle
+  empty_pathways$pathways <- empty_pathways$pathways[0, , drop = FALSE]
+  empty_pathways$pathway_genes <- empty_pathways$pathway_genes[0, , drop = FALSE]
+  expect_error(
+    validate_public_bundle(empty_pathways, enforce_frozen = FALSE),
+    "unique IDs and labels",
+    fixed = TRUE
+  )
+
+  duplicate_ids <- bundle
+  duplicate_ids$pathways$pathway_id[[2L]] <-
+    duplicate_ids$pathways$pathway_id[[1L]]
+  expect_error(
+    validate_public_bundle(duplicate_ids, enforce_frozen = FALSE),
+    "unique IDs and labels",
+    fixed = TRUE
+  )
+
+  duplicate_labels <- bundle
+  duplicate_labels$pathways$label[[2L]] <-
+    duplicate_labels$pathways$label[[1L]]
+  expect_error(
+    validate_public_bundle(duplicate_labels, enforce_frozen = FALSE),
+    "unique IDs and labels",
+    fixed = TRUE
+  )
+
+  invalid_method <- bundle
+  invalid_method$pathways$source[[1L]] <- "Other"
+  expect_error(
+    validate_public_bundle(invalid_method, enforce_frozen = FALSE),
+    "pathway statistics",
+    fixed = TRUE
+  )
+
+  invalid_probability <- bundle
+  invalid_probability$pathways$p_adjust[[1L]] <- 2
+  expect_error(
+    validate_public_bundle(invalid_probability, enforce_frozen = FALSE),
+    "pathway statistics",
+    fixed = TRUE
+  )
+
+  invalid_score <- bundle
+  invalid_score$pathways$score[[1L]] <- Inf
+  expect_error(
+    validate_public_bundle(invalid_score, enforce_frozen = FALSE),
+    "pathway statistics",
+    fixed = TRUE
+  )
+
+  invalid_count <- bundle
+  invalid_count$pathways$gene_count[[1L]] <- NA_real_
+  expect_error(
+    validate_public_bundle(invalid_count, enforce_frozen = FALSE),
+    "pathway statistics",
+    fixed = TRUE
+  )
+})
+
+test_that("exporter records scclrR PFlog parameters from raw counts", {
+  testthat::skip_if_not_installed("scclrR")
   counts <- methods::as(Matrix::Matrix(
     matrix(c(10, 0, 5, 20, 15, 0), nrow = 2L),
     sparse = TRUE
   ), "dgCMatrix")
   dimnames(counts) <- list(c("Glul", "EGFP"), c("cell_a", "cell_b", "cell_c"))
-  library_size <- Matrix::colSums(counts)
-  normalized <- log1p(sweep(as.matrix(counts), 2L, library_size, "/") * 10000)
-  normalized <- methods::as(Matrix::Matrix(normalized, sparse = TRUE), "dgCMatrix")
+  reference <- scclrR::normalize_matrix(counts, target = "auto")
+  observed <- espiviz_pflog_normalization(counts)
 
-  observed <- espiviz_validate_normalization(counts, normalized)
-  expect_lte(observed$max_abs_error, 1e-12)
-
-  normalized[1, 1] <- normalized[1, 1] + 0.01
-  expect_error(
-    espiviz_validate_normalization(counts, normalized),
-    "does not match",
-    ignore.case = TRUE
+  expect_named(observed, c(
+    "method", "target", "log1p", "centered", "alpha", "scale", "k",
+    "cell_count", "gene_count", "package_version", "package_remote_sha",
+    "center_min", "center_max"
+  ), ignore.order = TRUE)
+  expect_match(observed$method, "scclrR|PFlog", ignore.case = TRUE)
+  expect_identical(observed$target, "auto")
+  expect_true(observed$log1p)
+  expect_true(observed$centered)
+  expect_equal(observed$alpha, reference$alpha, tolerance = 1e-12)
+  expect_equal(observed$scale, 4 * reference$alpha, tolerance = 1e-12)
+  expect_equal(observed$k, reference$k, tolerance = 1e-12)
+  expect_identical(observed$cell_count, ncol(counts))
+  expect_identical(observed$gene_count, nrow(counts))
+  expect_identical(
+    observed$package_version,
+    as.character(utils::packageVersion("scclrR"))
   )
+  expect_match(observed$package_remote_sha, "^[0-9a-f]{40}$")
+  expect_equal(observed$center_min, min(reference$center), tolerance = 1e-12)
+  expect_equal(observed$center_max, max(reference$center), tolerance = 1e-12)
 })
 
 test_that("source extraction enforces dimensions, reduction, and cluster column", {
@@ -218,7 +303,13 @@ test_that("source extraction enforces dimensions, reduction, and cluster column"
     "10_control", "10_control", "3_estim", "3_estim"
   ))
   expect_false(any(grepl("barcode", extracted$cells$cell_id, fixed = TRUE)))
-  expect_lte(extracted$normalization_check$max_abs_error, 1e-12)
+  expect_match(
+    extracted$normalization_check$method,
+    "scclrR|PFlog",
+    ignore.case = TRUE
+  )
+  expect_identical(extracted$normalization_check$cell_count, 4L)
+  expect_identical(extracted$normalization_check$gene_count, 3L)
 
   wrong_dimensions <- contract
   wrong_dimensions$genes <- 4L
@@ -245,16 +336,12 @@ test_that("source extraction enforces dimensions, reduction, and cluster column"
   )
 })
 
-test_that("source extraction rejects a normalized layer that drifts from counts", {
+test_that("source extraction does not require a Seurat normalized data layer", {
   object <- make_synthetic_seurat_source()
-  normalized <- SeuratObject::LayerData(object[["RNA"]], layer = "data")
-  normalized[1, 1] <- normalized[1, 1] + 0.01
-  SeuratObject::LayerData(object[["RNA"]], layer = "data") <- normalized
 
-  expect_error(
-    espiviz_extract_source(object, synthetic_source_contract()),
-    "does not match",
-    ignore.case = TRUE
+  expect_false("data" %in% SeuratObject::Layers(object[["RNA"]]))
+  expect_silent(
+    espiviz_extract_source(object, synthetic_source_contract())
   )
 })
 
@@ -264,4 +351,19 @@ test_that("build-data script can be sourced without executing the CLI", {
 
   expect_silent(source(build_script, local = environment))
   expect_true(exists("espiviz_run_cli", envir = environment, mode = "function"))
+  expect_true(exists(
+    "espiviz_format_pflog_status",
+    envir = environment,
+    mode = "function"
+  ))
+  status <- environment$espiviz_format_pflog_status(list(
+    alpha = 0.25,
+    k = 100,
+    package_version = "0.1.0",
+    package_remote_sha = paste(rep("a", 40L), collapse = "")
+  ))
+  expect_identical(
+    status,
+    "PFlog alpha 0.25; K 100; scclrR 0.1.0 (aaaaaaaa)."
+  )
 })

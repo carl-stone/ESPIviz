@@ -21,6 +21,8 @@ jobs:
           r-version: '4.6.0'
           use-public-rspm: true
 
+      - uses: dtolnay/rust-toolchain@stable
+
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           cache-version: 1
@@ -36,6 +38,7 @@ jobs:
             any::org.Mm.eg.db
             any::plotly
             any::rsconnect
+            github::cleartools/scclrR@6d6378dd41502a8606da14adb01a01032cb75224
             any::SeuratObject
             any::shiny
             any::testthat

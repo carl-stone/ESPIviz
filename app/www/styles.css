@@ -120,6 +120,15 @@ h3,
   color: var(--ink);
 }
 
+.figure-note {
+  border-top: 1px solid var(--rule);
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  margin: 0;
+  padding: 0.7rem 1rem 0.8rem;
+}
+
 .selection-card .card-body {
   display: block;
 }
@@ -233,6 +242,20 @@ textarea:focus-visible,
   margin: 0;
 }
 
+.result-divider {
+  margin: 2rem 0 1.4rem;
+}
+
+.results-card,
+.results-card .tab-content,
+.results-card .tab-pane {
+  min-width: 0;
+}
+
+.results-card .nav-tabs {
+  flex-wrap: wrap;
+}
+
 .span-12 {
   grid-column: 1 / -1;
 }
@@ -312,6 +335,72 @@ textarea:focus-visible,
 .current-gene-display span {
   color: var(--ink-soft);
   font-size: 0.78rem;
+}
+
+.de-plot-header {
+  align-items: center;
+  display: flex;
+  gap: 1.25rem;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.de-plot-header .form-group {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.de-plot-header .control-label {
+  font-family: "Source Sans 3", sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.de-plot-header .radio-inline {
+  font-family: "Source Sans 3", sans-serif;
+  font-size: 0.82rem;
+}
+
+.de-plot-copy {
+  line-height: 1.45;
+  margin: 0.75rem 1rem 0;
+}
+
+.de-gene-detail dl {
+  display: grid;
+  font-size: 0.82rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin: 1rem 0 0;
+}
+
+.de-gene-detail dt,
+.de-gene-detail dd {
+  border-top: 1px solid var(--rule);
+  margin: 0;
+  padding: 0.5rem 0;
+}
+
+.de-gene-detail dd {
+  font-variant-numeric: tabular-nums;
+  max-width: 11rem;
+  padding-left: 0.75rem;
+  text-align: right;
+}
+
+@media (max-width: 700px) {
+  .de-plot-header,
+  .de-plot-header .form-group {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .de-plot-header {
+    gap: 0.6rem;
+  }
 }
 
 .pathway-detail h2 {

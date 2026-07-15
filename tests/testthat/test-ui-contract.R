@@ -43,12 +43,26 @@ test_that("Explore limits UMAP colors and exposes every selection mode", {
     synthetic_bundle()
   ))$html
 
-  expect_match(html, "Gene expression", fixed = TRUE)
+  expect_match(html, "PFlog expression", fixed = TRUE)
   expect_match(html, ">Cluster<", fixed = TRUE)
   expect_match(html, ">Condition<", fixed = TRUE)
   expect_match(html, "Clear selection", fixed = TRUE)
   expect_match(html, "Click a cell or use box or lasso", fixed = TRUE)
   expect_no_match(html, "QC", fixed = TRUE)
+})
+
+test_that("Explore summary tables use plain-language PFlog labels", {
+  table <- summary_datatable(data.frame(
+    gene = "Glul",
+    mean_expression = 1.25,
+    detected_pct = 90,
+    stringsAsFactors = FALSE
+  ))
+
+  expect_identical(
+    names(table$x$data),
+    c("Gene", "Mean PFlog", "Detected (%)")
+  )
 })
 
 test_that("Explore exposes an explicit whole-cluster selection control", {
@@ -68,8 +82,72 @@ test_that("Explore provides plotted summaries by cluster and condition", {
 
   expect_match(html, "explore_test-cluster_summary_plot_ui", fixed = TRUE)
   expect_match(html, "explore_test-condition_summary_plot_ui", fixed = TRUE)
-  expect_match(html, "Mean expression", fixed = TRUE)
+  expect_match(html, "Mean PFlog expression", fixed = TRUE)
   expect_match(html, "dot size", fixed = TRUE)
+})
+
+test_that("Explore exposes replicate-aware visualization panels", {
+  html <- htmltools::renderTags(
+    explore_ui("explore_test", synthetic_bundle())
+  )$html
+
+  for (label in c(
+    "By sample",
+    "Pooled condition",
+    "By cluster",
+    "Cluster markers"
+  )) {
+    expect_match(html, paste0(">", label, "<"), fixed = TRUE)
+  }
+  for (id in c(
+    "sample_summary_plot_ui",
+    "sample_table",
+    "composition_plot",
+    "composition_table",
+    "marker_overview_plot_ui"
+  )) {
+    expect_match(html, paste0("explore_test-", id), fixed = TRUE)
+  }
+  expect_match(
+    html,
+    "Select a marker row below to make that gene current",
+    fixed = TRUE
+  )
+  expect_no_match(html, "Explore chosen marker", fixed = TRUE)
+
+  source_text <- paste(
+    readLines(
+      file.path(repo_root, "app", "R", "10-explore.R"),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+  for (server_rendered_id in c(
+    "sample_summary_plot",
+    "marker_overview_plot"
+  )) {
+    expect_match(
+      source_text,
+      paste0('"', server_rendered_id, '"'),
+      fixed = TRUE
+    )
+  }
+  plot_chunks <- strsplit(source_text, "\n    output$", fixed = TRUE)[[1L]]
+  static_plot_ids <- c(
+    "gene_comparison_plot",
+    "condition_summary_plot",
+    "sample_summary_plot",
+    "composition_plot",
+    "cluster_summary_plot",
+    "marker_overview_plot"
+  )
+  for (plot_id in static_plot_ids) {
+    chunk <- plot_chunks[
+      startsWith(plot_chunks, paste0(plot_id, " <- shiny::renderPlot"))
+    ]
+    expect_length(chunk, 1L)
+    expect_match(chunk, "alt = function()", fixed = TRUE)
+  }
 })
 
 test_that("all requested application downloads are wired into the UI", {
@@ -118,15 +196,28 @@ test_that("the maintenance surface renders without application data", {
 test_that("pathway details render with supported HTML tags", {
   expect_app_helper("pathway_detail_ui")
   bundle <- synthetic_bundle()
-  row <- bundle$pathways[1L, , drop = FALSE]
-  genes <- bundle$pathway_genes$gene[
-    bundle$pathway_genes$pathway_id == row$pathway_id[[1L]]
+  gsea_row <- bundle$pathways[1L, , drop = FALSE]
+  gsea_genes <- bundle$pathway_genes$gene[
+    bundle$pathway_genes$pathway_id == gsea_row$pathway_id[[1L]]
   ]
-  html <- htmltools::renderTags(pathway_detail_ui(row, genes))$html
+  gsea_html <- htmltools::renderTags(
+    pathway_detail_ui(gsea_row, gsea_genes)
+  )$html
+  ora_row <- bundle$pathways[2L, , drop = FALSE]
+  ora_row$source <- "ORA"
+  ora_genes <- bundle$pathway_genes$gene[
+    bundle$pathway_genes$pathway_id == ora_row$pathway_id[[1L]]
+  ]
+  ora_html <- htmltools::renderTags(
+    pathway_detail_ui(ora_row, ora_genes)
+  )$html
 
-  expect_match(html, "<dl>", fixed = TRUE)
-  expect_match(html, "<dt>Method</dt>", fixed = TRUE)
-  expect_match(html, "<dd>", fixed = TRUE)
+  expect_match(gsea_html, "<dl>", fixed = TRUE)
+  expect_match(gsea_html, "<dt>Method</dt>", fixed = TRUE)
+  expect_match(gsea_html, "Source gene-set size", fixed = TRUE)
+  expect_match(gsea_html, "Exported leading-edge genes", fixed = TRUE)
+  expect_match(ora_html, "Overlapping genes", fixed = TRUE)
+  expect_match(ora_html, "Exported overlapping genes", fixed = TRUE)
 })
 
 test_that("About data links render with supported list tags", {

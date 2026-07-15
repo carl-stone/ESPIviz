@@ -50,6 +50,55 @@ test_that("bundle validation rejects schema and primary-result drift", {
     "24,601|24601|differential|DE|row",
     ignore.case = TRUE
   )
+
+  missing_base_mean <- bundle
+  missing_base_mean$primary_de$baseMean <- NULL
+  expect_error(
+    validate_bundle(missing_base_mean, expected = expected),
+    "differential-expression",
+    fixed = TRUE
+  )
+
+  invalid_base_mean <- bundle
+  invalid_base_mean$primary_de$baseMean[[1L]] <- -1
+  expect_error(
+    validate_bundle(invalid_base_mean, expected = expected),
+    "differential-expression",
+    fixed = TRUE
+  )
+})
+
+test_that("bundle validation rejects unusable featured pathway tables", {
+  expect_app_helper("validate_bundle")
+  bundle <- synthetic_bundle()
+  expected <- synthetic_expectations(bundle)
+
+  empty_pathways <- bundle
+  empty_pathways$pathways <- empty_pathways$pathways[0, , drop = FALSE]
+  empty_pathways$pathway_genes <- empty_pathways$pathway_genes[0, , drop = FALSE]
+  expect_error(
+    validate_bundle(empty_pathways, expected = expected),
+    "featured pathway tables",
+    fixed = TRUE
+  )
+
+  duplicate_pathways <- bundle
+  duplicate_pathways$pathways$pathway_id[[2L]] <-
+    duplicate_pathways$pathways$pathway_id[[1L]]
+  expect_error(
+    validate_bundle(duplicate_pathways, expected = expected),
+    "featured pathway tables",
+    fixed = TRUE
+  )
+
+  duplicate_labels <- bundle
+  duplicate_labels$pathways$label[[2L]] <-
+    duplicate_labels$pathways$label[[1L]]
+  expect_error(
+    validate_bundle(duplicate_labels, expected = expected),
+    "featured pathway tables",
+    fixed = TRUE
+  )
 })
 
 test_that("bundle loading verifies the asset checksum", {

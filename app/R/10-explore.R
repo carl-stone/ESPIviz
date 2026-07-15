@@ -19,7 +19,7 @@ explore_ui <- function(id, bundle) {
         ns("color_by"),
         "Color UMAP by",
         choices = c(
-          "Gene expression" = "expression",
+          "PFlog expression" = "expression",
           "Cluster" = "cluster",
           "Condition" = "condition"
         )
@@ -99,7 +99,21 @@ explore_ui <- function(id, bundle) {
             shiny::uiOutput(ns("umap_title"), inline = TRUE)
           )
         ),
-        plotly::plotlyOutput(ns("umap"), height = "650px")
+        htmltools::div(
+          role = "region",
+          `aria-label` = "Interactive UMAP",
+          `aria-describedby` = ns("umap_note"),
+          plotly::plotlyOutput(ns("umap"), height = "650px")
+        ),
+        htmltools::p(
+          id = ns("umap_note"),
+          class = "figure-note",
+          paste(
+            "UMAP is a qualitative two-dimensional projection.",
+            "Use local neighborhoods for exploration; do not interpret",
+            "global distance, cluster area, or point density quantitatively."
+          )
+        )
       ),
       bslib::card(
         class = "selection-card",
@@ -187,10 +201,50 @@ explore_ui <- function(id, bundle) {
             DT::DTOutput(ns("comparison_table"))
           ),
           bslib::nav_panel(
-            "By condition",
-            htmltools::h3("Expression by condition", class = "result-title"),
+            "By sample",
+            htmltools::h3(
+              "Expression by biological sample",
+              class = "result-title"
+            ),
             htmltools::p(
-              "Mean expression is shown by color; detected-cell percentage is shown by dot size.",
+              paste(
+                "Samples are the biological replicates and are ordered by",
+                "condition. Mean PFlog expression is shown by color; detected-cell",
+                "percentage is shown by dot size."
+              ),
+              class = "supporting-copy"
+            ),
+            shiny::uiOutput(ns("sample_summary_plot_ui")),
+            DT::DTOutput(ns("sample_table")),
+            htmltools::hr(class = "result-divider"),
+            htmltools::h3(
+              "Observed cluster composition",
+              class = "result-title"
+            ),
+            htmltools::p(
+              paste(
+                "Each tile reports recovered cells and their percentage",
+                "within one sample. This is descriptive, not a",
+                "differential-abundance analysis."
+              ),
+              class = "supporting-copy"
+            ),
+            shiny::plotOutput(ns("composition_plot"), height = "520px"),
+            DT::DTOutput(ns("composition_table"))
+          ),
+          bslib::nav_panel(
+            "Pooled condition",
+            htmltools::h3(
+              "Expression by condition — pooled cells",
+              class = "result-title"
+            ),
+            htmltools::p(
+              paste(
+                "This descriptive view pools cells within each condition.",
+                "Use the sample view above to inspect replicate consistency.",
+                "Mean PFlog expression is shown by color and detected-cell",
+                "percentage by dot size."
+              ),
               class = "supporting-copy"
             ),
             shiny::uiOutput(ns("condition_summary_plot_ui")),
@@ -203,11 +257,38 @@ explore_ui <- function(id, bundle) {
               class = "result-title"
             ),
             htmltools::p(
-              "Mean expression is shown by color; detected-cell percentage is shown by dot size.",
+              "Mean PFlog expression is shown by color; detected-cell percentage is shown by dot size.",
               class = "supporting-copy"
             ),
             shiny::uiOutput(ns("cluster_summary_plot_ui")),
             DT::DTOutput(ns("cluster_table"))
+          ),
+          bslib::nav_panel(
+            "Cluster markers",
+            htmltools::div(
+              class = "result-toolbar",
+              shiny::selectInput(
+                ns("marker_cluster"),
+                "Marker genes from cluster",
+                choices = cluster_choices,
+                width = "220px"
+              )
+            ),
+            htmltools::p(
+              paste(
+                "The top eight marker genes for the chosen cluster are",
+                "shown across every cluster. Color is scaled within each",
+                "gene, so compare patterns across clusters rather than",
+                "absolute color between genes."
+              ),
+              class = "supporting-copy"
+            ),
+            shiny::uiOutput(ns("marker_overview_plot_ui")),
+            htmltools::p(
+              "Select a marker row below to make that gene current across the app.",
+              class = "supporting-copy"
+            ),
+            DT::DTOutput(ns("marker_table"))
           ),
           bslib::nav_panel(
             "Gene set",
@@ -216,24 +297,6 @@ explore_ui <- function(id, bundle) {
               class = "supporting-copy"
             ),
             DT::DTOutput(ns("gene_set_table"))
-          ),
-          bslib::nav_panel(
-            "Top markers",
-            htmltools::div(
-              class = "result-toolbar",
-              shiny::selectInput(
-                ns("marker_cluster"),
-                "Cluster",
-                choices = cluster_choices,
-                width = "150px"
-              ),
-              shiny::actionButton(
-                ns("open_marker"),
-                "Explore chosen marker",
-                class = "btn-primary"
-              )
-            ),
-            DT::DTOutput(ns("marker_table"))
           )
         )
       )
@@ -242,24 +305,53 @@ explore_ui <- function(id, bundle) {
 }
 
 summary_datatable <- function(data, page_length = 25L) {
-  numeric_columns <- intersect(
-    c(
-      "selected_mean",
-      "selected_median",
-      "selected_detected_pct",
-      "remaining_mean",
-      "remaining_median",
-      "remaining_detected_pct",
-      "mean_difference",
-      "mean_ratio",
-      "detection_pp_difference",
-      "detection_ratio",
-      "mean_expression",
-      "median_expression",
-      "detected_pct"
-    ),
-    names(data)
+  labels <- c(
+    gene = "Gene",
+    condition = "Condition",
+    cluster = "Cluster",
+    sample = "Sample",
+    cell_count = "Cells",
+    sample_total = "Sample cells",
+    selected_n = "Selected cells",
+    remaining_n = "Remaining cells",
+    selected_mean = "Selected mean PFlog",
+    selected_median = "Selected median PFlog",
+    selected_detected_n = "Selected detected cells",
+    selected_detected_pct = "Selected detected (%)",
+    remaining_mean = "Remaining mean PFlog",
+    remaining_median = "Remaining median PFlog",
+    remaining_detected_n = "Remaining detected cells",
+    remaining_detected_pct = "Remaining detected (%)",
+    mean_difference = "Mean PFlog difference",
+    detection_pp_difference = "Detection difference (pp)",
+    detection_ratio = "Detection ratio",
+    mean_expression = "Mean PFlog",
+    median_expression = "Median PFlog",
+    detected_n = "Detected cells",
+    detected_pct = "Detected (%)",
+    cell_pct = "Within sample (%)"
   )
+  numeric_names <- c(
+    "selected_mean",
+    "selected_median",
+    "selected_detected_pct",
+    "remaining_mean",
+    "remaining_median",
+    "remaining_detected_pct",
+    "mean_difference",
+    "detection_pp_difference",
+    "detection_ratio",
+    "mean_expression",
+    "median_expression",
+    "detected_pct",
+    "cell_pct"
+  )
+  original_names <- names(data)
+  display_names <- original_names
+  matched <- match(original_names, names(labels))
+  display_names[!is.na(matched)] <- unname(labels[matched[!is.na(matched)]])
+  names(data) <- display_names
+  numeric_columns <- display_names[original_names %in% numeric_names]
   table <- DT::datatable(
     data,
     rownames = FALSE,
@@ -286,6 +378,7 @@ explore_server <- function(id, bundle, state) {
     source_id <- ns("umap_source")
     input_message <- shiny::reactiveVal(NULL)
     analysis_genes <- state_analysis_genes(state)
+    composition_data <- prepare_cluster_composition(bundle)
     show_selection_comparison <- function() {
       bslib::nav_select(
         "explore_results",
@@ -309,21 +402,6 @@ explore_server <- function(id, bundle, state) {
       {
         if (!is.null(input$active_gene) && nzchar(input$active_gene)) {
           set_state_gene(state, bundle, input$active_gene)
-        }
-      },
-      ignoreInit = TRUE
-    )
-
-    shiny::observeEvent(
-      state$active_gene(),
-      {
-        if (!identical(input$active_gene, state$active_gene())) {
-          shiny::updateSelectizeInput(
-            session,
-            "active_gene",
-            selected = state$active_gene(),
-            server = TRUE
-          )
         }
       },
       ignoreInit = TRUE
@@ -576,7 +654,16 @@ explore_server <- function(id, bundle, state) {
         }
         plot
       },
-      height = function() comparison_plot_height(length(page_info()$genes))
+      height = function() comparison_plot_height(length(page_info()$genes)),
+      alt = function() {
+        paste(
+          "Dot plot comparing PFlog expression for",
+          length(page_info()$genes),
+          "genes across all cells, selected cells, and remaining cells.",
+          "Color shows mean PFlog expression; dot size shows the percentage of",
+          "cells with detected expression."
+        )
+      }
     )
 
     output$comparison_table <- DT::renderDT({
@@ -586,6 +673,12 @@ explore_server <- function(id, bundle, state) {
     condition_page_summary <- shiny::reactive({
       genes <- page_info()$genes
       data <- selection_summary()$selected_by_condition
+      data[data$gene %in% genes, , drop = FALSE]
+    })
+
+    sample_page_summary <- shiny::reactive({
+      genes <- page_info()$genes
+      data <- selection_summary()$selected_by_sample
       data[data$gene %in% genes, , drop = FALSE]
     })
 
@@ -608,7 +701,61 @@ explore_server <- function(id, bundle, state) {
         group_column = "condition",
         group_label = "Condition"
       ),
-      height = function() comparison_plot_height(length(page_info()$genes))
+      height = function() comparison_plot_height(length(page_info()$genes)),
+      alt = function() {
+        paste(
+          "Dot plot of PFlog expression for",
+          length(page_info()$genes),
+          "genes across pooled conditions. Color shows mean PFlog expression;",
+          "dot size shows the percentage of selected cells with detected",
+          "expression."
+        )
+      }
+    )
+
+    output$sample_summary_plot_ui <- shiny::renderUI({
+      shiny::plotOutput(
+        ns("sample_summary_plot"),
+        height = paste0(comparison_plot_height(length(page_info()$genes)), "px")
+      )
+    })
+
+    output$sample_summary_plot <- shiny::renderPlot(
+      make_group_summary_plot(
+        sample_page_summary(),
+        group_column = "sample",
+        group_label = "Biological sample",
+        rotate_x = TRUE
+      ),
+      height = function() comparison_plot_height(length(page_info()$genes)),
+      alt = function() {
+        paste(
+          "Dot plot of PFlog expression for",
+          length(page_info()$genes),
+          "genes across",
+          length(unique(sample_page_summary()$sample)),
+          "biological samples ordered by condition. Color shows mean PFlog",
+          "expression; dot size shows the percentage of selected cells",
+          "with detected expression."
+        )
+      }
+    )
+
+    output$composition_plot <- shiny::renderPlot(
+      {
+        make_cluster_composition_plot(composition_data, bundle)
+      },
+      alt = function() {
+        paste(
+          "Heatmap of recovered cell counts and within-sample percentages",
+          "for",
+          length(unique(composition_data$sample)),
+          "biological samples across",
+          length(unique(composition_data$cluster)),
+          "final clusters, faceted by condition. This is descriptive and",
+          "does not report differential abundance."
+        )
+      }
     )
 
     output$cluster_summary_plot_ui <- shiny::renderUI({
@@ -624,11 +771,40 @@ explore_server <- function(id, bundle, state) {
         group_column = "cluster",
         group_label = "Final cluster"
       ),
-      height = function() comparison_plot_height(length(page_info()$genes))
+      height = function() comparison_plot_height(length(page_info()$genes)),
+      alt = function() {
+        paste(
+          "Dot plot of PFlog expression for",
+          length(page_info()$genes),
+          "genes across final clusters. Color shows mean PFlog expression; dot",
+          "size shows the percentage of selected cells with detected",
+          "expression."
+        )
+      }
     )
 
     output$condition_table <- DT::renderDT({
       summary_datatable(condition_page_summary(), page_length = 25L)
+    })
+
+    output$sample_table <- DT::renderDT({
+      summary_datatable(sample_page_summary(), page_length = 25L)
+    })
+
+    output$composition_table <- DT::renderDT({
+      data <- composition_data[
+        ,
+        c(
+          "condition",
+          "sample",
+          "cluster",
+          "cell_count",
+          "sample_total",
+          "cell_pct"
+        ),
+        drop = FALSE
+      ]
+      summary_datatable(data, page_length = 48L)
     })
 
     output$cluster_table <- DT::renderDT({
@@ -657,6 +833,46 @@ explore_server <- function(id, bundle, state) {
       data[order(data$rank), , drop = FALSE]
     })
 
+    marker_overview <- shiny::reactive({
+      prepare_marker_overview(
+        bundle,
+        marker_cluster = input$marker_cluster %||% "",
+        top_n = 8L
+      )
+    })
+
+    output$marker_overview_plot_ui <- shiny::renderUI({
+      gene_count <- length(unique(marker_overview()$gene))
+      shiny::plotOutput(
+        ns("marker_overview_plot"),
+        height = paste0(marker_overview_height(gene_count), "px")
+      )
+    })
+
+    output$marker_overview_plot <- shiny::renderPlot(
+      {
+        plot <- make_marker_overview_plot(marker_overview())
+        if (is.null(plot)) {
+          return(invisible(NULL))
+        }
+        plot
+      },
+      height = function() {
+        marker_overview_height(length(unique(marker_overview()$gene)))
+      },
+      alt = function() {
+        genes <- unique(as.character(marker_overview()$gene))
+        paste0(
+          "Dot plot of the top marker genes for final cluster ",
+          input$marker_cluster %||% "",
+          " across all final clusters. Genes shown: ",
+          paste(genes, collapse = ", "),
+          ". Color is relative mean PFlog expression scaled within each gene; ",
+          "dot size is the percentage of cells with detected expression."
+        )
+      }
+    )
+
     output$marker_table <- DT::renderDT({
       DT::datatable(
         marker_data(),
@@ -667,13 +883,13 @@ explore_server <- function(id, bundle, state) {
       )
     })
 
-    shiny::observeEvent(input$open_marker, {
+    shiny::observeEvent(input$marker_table_rows_selected, {
       row <- input$marker_table_rows_selected %||% integer()
       data <- marker_data()
       if (length(row) > 0L && row[[1L]] <= nrow(data)) {
         set_state_gene(state, bundle, data$gene[[row[[1L]]]])
       }
-    })
+    }, ignoreInit = TRUE)
 
     output$download_umap_png <- shiny::downloadHandler(
       filename = function() {

@@ -97,7 +97,7 @@ test_that("selection and grouped expression dot plots build across edge cases", 
   )
 })
 
-test_that("dot-plot color scales start at zero without failing on all-zero genes", {
+test_that("PFlog dot-plot color scales are symmetric around zero", {
   bundle <- synthetic_bundle()
   selected <- bundle$cells$cell_id[1:2]
   comparison <- summarize_selection(bundle, selected, "Glul")$comparison
@@ -105,13 +105,45 @@ test_that("dot-plot color scales start at zero without failing on all-zero genes
   plot <- make_gene_comparison_plot(comparison)
   color_scale <- plot$scales$get_scales("colour")
 
-  expect_equal(color_scale$limits, c(0, max(plotted$mean_expression)))
+  limit <- max(abs(plotted$mean_expression))
+  expect_equal(color_scale$limits, c(-limit, limit))
 
   zero <- summarize_selection(bundle, selected, "ZeroGene")$comparison
   zero_plot <- make_gene_comparison_plot(zero)
   zero_scale <- zero_plot$scales$get_scales("colour")
-  expect_equal(zero_scale$limits, c(0, 1))
+  zero_data <- comparison_plot_data(zero)
+  zero_limit <- max(abs(zero_data$mean_expression))
+  expect_equal(zero_scale$limits, c(-zero_limit, zero_limit))
   expect_silent(ggplot2::ggplot_build(zero_plot))
+})
+
+test_that("interactive PFlog UMAP uses a zero-centered colorbar", {
+  bundle <- synthetic_bundle()
+  values <- expression_matrix(bundle, "Glul")[, 1L]
+  limit <- max(abs(values))
+  built <- plotly::plotly_build(make_umap_plotly(
+    bundle = bundle,
+    color_by = "expression",
+    gene = "Glul",
+    selected_cell_ids = character(),
+    source = "pflog_color_test"
+  ))
+
+  color_traces <- Filter(
+    function(trace) isTRUE(trace$marker$showscale),
+    built$x$data
+  )
+  expect_length(color_traces, 1L)
+  expect_equal(color_traces[[1L]]$marker$cmin, -limit, tolerance = 1e-12)
+  expect_equal(color_traces[[1L]]$marker$cmax, limit, tolerance = 1e-12)
+  expect_equal(
+    mean(c(
+      color_traces[[1L]]$marker$cmin,
+      color_traces[[1L]]$marker$cmax
+    )),
+    0,
+    tolerance = 1e-12
+  )
 })
 
 test_that("comparison plot height stays visible and scales through one page", {

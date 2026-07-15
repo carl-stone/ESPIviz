@@ -24,6 +24,24 @@ espiviz_script_path <- function() {
 
 source(file.path(dirname(espiviz_script_path()), "lib", "exporter.R"))
 
+espiviz_format_pflog_status <- function(normalization) {
+  revision <- normalization$package_remote_sha %||% NA_character_
+  revision <- if (
+    length(revision) == 1L && !is.na(revision) && nzchar(revision)
+  ) {
+    substr(revision, 1L, 8L)
+  } else {
+    "unrecorded revision"
+  }
+  sprintf(
+    "PFlog alpha %.6g; K %.6g; scclrR %s (%s).",
+    normalization$alpha,
+    normalization$k,
+    normalization$package_version,
+    revision
+  )
+}
+
 espiviz_cli_help <- function() {
   cat(
     paste0(
@@ -133,12 +151,9 @@ espiviz_run_cli <- function(arguments = commandArgs(trailingOnly = TRUE)) {
       nrow(bundle$pathways)
     )
   )
-  message(
-    sprintf(
-      "Normalization sampled max absolute error: %.3g",
-      bundle$provenance$normalization_check$max_abs_error
-    )
-  )
+  message(espiviz_format_pflog_status(
+    bundle$provenance$normalization_check
+  ))
   if (isTRUE(options$dry_run)) {
     message("Dry run complete; no files were written.")
     return(invisible(bundle))

@@ -116,6 +116,7 @@ test_that("Connect manifest contains only app runtime files and dependencies", {
     c(
       "Seurat",
       "SeuratObject",
+      "scclrR",
       "AnnotationDbi",
       "org.Mm.eg.db",
       "ESPI"

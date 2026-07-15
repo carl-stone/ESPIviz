@@ -79,25 +79,47 @@ about_ui <- function(id) {
           htmltools::div(
             htmltools::h2("Expression"),
             htmltools::p(
-              "Normalized expression is calculated from raw counts for each cell as log1p(10,000 × count / cell library size)."
+              paste(
+                "Expression uses scclrR PFlog with target = 'auto':",
+                "log1p(4 × alpha × count) is centered by the mean shifted",
+                "log count across all genes in each cell. Values can be",
+                "negative after centering; detection remains count > 0."
+              )
             )
           ),
           htmltools::div(
             htmltools::h2("Cell map"),
             htmltools::p(
-              "The UMAP coordinates and numeric cluster assignments come from the frozen final MG-selected analysis object."
+              paste(
+                "The UMAP coordinates and numeric cluster assignments come",
+                "from the frozen final MG-selected analysis object. The map",
+                "is used as a qualitative projection, not a quantitative",
+                "measure of global distance, area, or density."
+              )
             )
           ),
           htmltools::div(
             htmltools::h2("Condition model"),
             htmltools::p(
-              "The differential-expression view contains all 24,601 genes from the primary six-sample Mouse × Condition pseudobulk model with design ~ condition."
+              paste(
+                "The differential-expression view contains all 24,601 genes",
+                "from the primary six-sample Mouse × Condition pseudobulk",
+                "model with design ~ condition. MA and volcano views use the",
+                "reported shrunken log2 fold changes."
+              )
             )
           ),
           htmltools::div(
             htmltools::h2("Cell selections"),
             htmltools::p(
-              "Selection summaries report expression and detection for selected cells and all remaining cells. Ratios are left blank when their denominator is zero."
+              paste(
+                "Selection summaries report expression and detection for",
+                "selected cells and all remaining cells. Sample summaries",
+                "preserve biological replicates, and cluster composition is",
+                "descriptive only. PFlog comparisons use differences rather",
+                "than ratios; detection ratios are blank when the denominator",
+                "is zero."
+              )
             )
           )
         )
@@ -204,7 +226,7 @@ about_server <- function(id, bundle) {
           attributes(clean_bundle) <- attributes(clean_bundle)[
             setdiff(
               names(attributes(clean_bundle)),
-              c("bundle_path", "data_manifest")
+              c("bundle_path", "data_manifest", "pflog_state")
             )
           ]
           saveRDS(clean_bundle, file, compress = "xz")

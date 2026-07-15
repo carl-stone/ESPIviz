@@ -6,17 +6,20 @@ test_that("single- and multi-cell selections match direct calculations", {
   expect_app_helper("summarize_selection")
   bundle <- synthetic_bundle()
   selected <- bundle$cells$cell_id[c(1, 2)]
+  pflog <- pflog_state(bundle)
   expression <- normalize_gene_expression(
     as.numeric(bundle$counts[, "Glul"]),
-    bundle$cells$library_size
+    pflog$alpha,
+    pflog$center
   )
+  raw_counts <- as.numeric(bundle$counts[, "Glul"])
   selected_index <- bundle$cells$cell_id %in% selected
 
   observed <- summarize_selection(bundle, selected, "Glul")
   row <- comparison_row(observed, "Glul")
 
-  selected_detected <- expression[selected_index] > 0
-  remaining_detected <- expression[!selected_index] > 0
+  selected_detected <- raw_counts[selected_index] > 0
+  remaining_detected <- raw_counts[!selected_index] > 0
   selected_pct <- mean(selected_detected) * 100
   remaining_pct <- mean(remaining_detected) * 100
 
@@ -31,9 +34,9 @@ test_that("single- and multi-cell selections match direct calculations", {
   expect_equal(row$remaining_detected_n, sum(remaining_detected))
   expect_equal(row$remaining_detected_pct, remaining_pct)
   expect_equal(row$mean_difference, row$selected_mean - row$remaining_mean)
-  expect_equal(row$mean_ratio, row$selected_mean / row$remaining_mean)
   expect_equal(row$detection_pp_difference, selected_pct - remaining_pct)
   expect_equal(row$detection_ratio, selected_pct / remaining_pct)
+  expect_false("mean_ratio" %in% names(observed$comparison))
   expect_false(any(grepl(
     "p[_.]?value|confidence|(^|_)ci($|_)|rank",
     names(observed$comparison),
@@ -58,26 +61,29 @@ test_that("no selection and all-cell selection keep exploration available", {
     expect_equal(row$remaining_n, 0L)
     expect_true(is.na(row$remaining_mean))
     expect_true(is.na(row$mean_difference))
-    expect_true(is.na(row$mean_ratio))
     expect_true(is.na(row$detection_pp_difference))
     expect_true(is.na(row$detection_ratio))
   }
 })
 
-test_that("zero-expression genes return differences but blank ratios", {
+test_that("zero-count genes retain PFlog centering and zero detection", {
   expect_app_helper("summarize_selection")
   bundle <- synthetic_bundle()
   selected <- bundle$cells$cell_id[1:3]
+  expression <- expression_matrix(bundle, "ZeroGene")[, 1L]
+  selected_index <- bundle$cells$cell_id %in% selected
 
   observed <- summarize_selection(bundle, selected, "ZeroGene")
   row <- comparison_row(observed, "ZeroGene")
 
-  expect_equal(row$selected_mean, 0)
-  expect_equal(row$remaining_mean, 0)
+  expect_equal(row$selected_mean, mean(expression[selected_index]))
+  expect_equal(row$remaining_mean, mean(expression[!selected_index]))
   expect_equal(row$selected_detected_n, 0L)
   expect_equal(row$remaining_detected_n, 0L)
-  expect_equal(row$mean_difference, 0)
-  expect_true(is.na(row$mean_ratio))
+  expect_equal(
+    row$mean_difference,
+    mean(expression[selected_index]) - mean(expression[!selected_index])
+  )
   expect_equal(row$detection_pp_difference, 0)
   expect_true(is.na(row$detection_ratio))
 })
@@ -123,9 +129,11 @@ test_that("selected-cell summaries split by condition and cluster", {
   ]
   control_ids <- selected[bundle$cells$condition[match(selected, bundle$cells$cell_id)] == "p27CKO"]
   control_index <- match(control_ids, bundle$cells$cell_id)
+  pflog <- pflog_state(bundle)
   expected_expression <- normalize_gene_expression(
     as.numeric(bundle$counts[control_index, "Glul"]),
-    bundle$cells$library_size[control_index]
+    pflog$alpha,
+    pflog$center[control_index]
   )
   expect_equal(control_glul$mean_expression, mean(expected_expression))
   expect_equal(control_glul$median_expression, stats::median(expected_expression))

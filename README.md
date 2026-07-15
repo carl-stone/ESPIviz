@@ -2,8 +2,10 @@
 
 ESPIviz is the public interactive companion to the ESPI single-cell manuscript.
 It provides final-clustering UMAP exploration, gene and gene-set expression
-summaries, the complete primary condition-model differential-expression result,
-and a short set of manuscript-aligned pathways.
+summaries across clusters, conditions, and biological samples, descriptive
+sample-level cluster composition, marker overviews, the complete primary
+condition-model differential-expression result with MA and volcano views, and a
+short set of manuscript-aligned pathways shown on method-specific score scales.
 
 **[Open ESPIviz](https://019f6264-f0b5-e432-795c-c2f7e9fd5c95.share.connect.posit.cloud/)**
 
@@ -11,12 +13,24 @@ and a short set of manuscript-aligned pathways.
 
 The interface reports values directly and does not calculate differential
 expression from ad hoc cell selections. A selection can contain one cell, many
-cells, or every cell. Expression uses the same normalization as the frozen
-analysis object:
+cells, or every cell. Expression is derived from raw counts with
+[`scclrR` PFlog](https://github.com/cleartools/scclrR), using its automatic
+overdispersion target. For cell *i* and gene *j*:
 
 ```text
-log1p(10000 × raw count / cell library size)
+PFlog[i,j] = log1p(4 × alpha × count[i,j]) - cell_center[i]
 ```
+
+The center is calculated across the complete gene universe, so a zero count can
+have a negative PFlog value. Detection percentages always use raw counts. The
+Shiny runtime implements this sparse transformation directly and is tested for
+numerical identity with `scclrR`; it does not install the Rust-backed package in
+the deployment image.
+
+The pinned v1.0.0 data asset remains byte-for-byte immutable. It contains the
+raw counts needed for PFlog plus its original release-era normalization label;
+current expression values are defined by the PFlog code and are not read from a
+stored normalized layer.
 
 ## Repository contents
 
@@ -41,6 +55,13 @@ just test
 just manifest
 ```
 
+The standalone exporter and PFlog equivalence test additionally require Rust
+and the pinned `scclrR` source revision:
+
+```sh
+Rscript -e 'pak::pak("cleartools/scclrR@6d6378dd41502a8606da14adb01a01032cb75224")'
+```
+
 Copy `config/source-manifest.example.json` to the gitignored
 `config/source-manifest.local.json` and fill in explicit local source paths
 before building data. `just data-dry-run` validates those inputs without writing
@@ -50,8 +71,8 @@ a bundle. To run against a local bundle:
 just app-run /absolute/path/to/espiviz-data-v1.0.0.rds
 ```
 
-`just manifest` scans `app/` only, keeping Seurat and exporter dependencies out
-of production.
+`just manifest` scans `app/` only, keeping Seurat, `scclrR`, and other exporter
+dependencies out of production.
 
 ## Deployment
 

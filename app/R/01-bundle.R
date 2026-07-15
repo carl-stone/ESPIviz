@@ -235,7 +235,14 @@ validate_bundle <- function(bundle, expected = NULL) {
     )
   }
 
-  de_columns <- c("gene", "log2FoldChange", "pvalue", "padj", "design")
+  de_columns <- c(
+    "gene",
+    "baseMean",
+    "log2FoldChange",
+    "pvalue",
+    "padj",
+    "design"
+  )
   allowed_de_columns <- c(
     "gene",
     "baseMean",
@@ -257,6 +264,10 @@ validate_bundle <- function(bundle, expected = NULL) {
       any(!names(bundle$primary_de) %in% allowed_de_columns) ||
       anyDuplicated(casefold_key(bundle$primary_de$gene)) ||
       any(!bundle$primary_de$gene %in% genes) ||
+      !is.numeric(bundle$primary_de$baseMean) ||
+      anyNA(bundle$primary_de$baseMean) ||
+      any(!is.finite(bundle$primary_de$baseMean)) ||
+      any(bundle$primary_de$baseMean < 0) ||
       !identical(
         unique(as.character(bundle$primary_de$design)),
         "primary_unpaired_condition"
@@ -294,6 +305,28 @@ validate_bundle <- function(bundle, expected = NULL) {
   if (
     !is.data.frame(bundle$pathways) ||
       !identical(names(bundle$pathways), pathway_columns) ||
+      nrow(bundle$pathways) == 0L ||
+      anyNA(bundle$pathways$pathway_id) ||
+      any(!nzchar(as.character(bundle$pathways$pathway_id))) ||
+      anyDuplicated(as.character(bundle$pathways$pathway_id)) ||
+      anyNA(bundle$pathways$label) ||
+      any(!nzchar(as.character(bundle$pathways$label))) ||
+      anyDuplicated(as.character(bundle$pathways$label)) ||
+      any(!as.character(bundle$pathways$source) %in% c("GSEA", "ORA")) ||
+      any(
+        !as.character(bundle$pathways$direction) %in% c("Control", "E-Stim")
+      ) ||
+      !is.numeric(bundle$pathways$p_adjust) ||
+      anyNA(bundle$pathways$p_adjust) ||
+      any(!is.finite(bundle$pathways$p_adjust)) ||
+      any(bundle$pathways$p_adjust < 0 | bundle$pathways$p_adjust > 1) ||
+      !is.numeric(bundle$pathways$score) ||
+      anyNA(bundle$pathways$score) ||
+      any(!is.finite(bundle$pathways$score)) ||
+      !is.numeric(bundle$pathways$gene_count) ||
+      anyNA(bundle$pathways$gene_count) ||
+      any(!is.finite(bundle$pathways$gene_count)) ||
+      any(bundle$pathways$gene_count < 0) ||
       !is.data.frame(bundle$pathway_genes) ||
       !identical(names(bundle$pathway_genes), c("pathway_id", "gene"))
   ) {
@@ -486,6 +519,7 @@ load_bundle <- function(
 
   bundle <- readRDS(path)
   validate_bundle(bundle, expected %||% manifest_expected(manifest))
+  attr(bundle, "pflog_state") <- compute_pflog_state(bundle$counts)
   attr(bundle, "bundle_path") <- normalizePath(path, mustWork = TRUE)
   attr(bundle, "data_manifest") <- manifest
   bundle

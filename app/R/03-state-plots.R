@@ -82,6 +82,13 @@ expression_palette <- function(bundle) {
   }
 }
 
+expression_color_limit <- function(values) {
+  values <- as.numeric(values)
+  values <- values[is.finite(values)]
+  limit <- if (length(values) > 0L) max(abs(values)) else 0
+  if (!is.finite(limit) || limit <= 0) 1 else limit
+}
+
 discrete_palette <- function(bundle, field, values) {
   configured <- unlist(bundle$palette[[field]] %||% list(), use.names = TRUE)
   values <- unique(as.character(values))
@@ -239,11 +246,12 @@ make_umap_plotly <- function(
     data$condition
   )
   if (identical(color_by, "expression")) {
+    color_limit <- expression_color_limit(data$color_value)
     hover <- paste0(
       hover,
       "<br>",
       gene,
-      ": ",
+      " PFlog: ",
       formatC(data$color_value, digits = 4L, format = "fg")
     )
     plot <- plotly::plot_ly(
@@ -260,12 +268,19 @@ make_umap_plotly <- function(
       marker = list(
         size = point_style$interactive_size,
         opacity = point_style$interactive_opacity,
+        cmin = -color_limit,
+        cmid = 0,
+        cmax = color_limit,
         line = list(width = 0)
       ),
       source = source,
       showlegend = FALSE
     )
-    plot <- plotly::colorbar(plot, title = gene)
+    plot <- plotly::colorbar(
+      plot,
+      title = paste(gene, "PFlog"),
+      limits = c(-color_limit, color_limit)
+    )
   } else {
     palette <- discrete_palette(bundle, color_by, data$color_value)
     plot <- plotly::plot_ly(
@@ -377,13 +392,22 @@ make_umap_ggplot <- function(bundle, color_by, gene, selected_cell_ids) {
   plot <- ggplot2::ggplot(data, ggplot2::aes(x = umap_1, y = umap_2))
   if (identical(color_by, "expression")) {
     colors <- expression_palette(bundle)
+    color_limit <- expression_color_limit(data$color_value)
+    middle_color <- colors[[ceiling(length(colors) / 2)]]
     plot <- plot +
       ggplot2::geom_point(
         ggplot2::aes(color = color_value),
         size = point_style$static_size,
         alpha = point_style$static_opacity
       ) +
-      ggplot2::scale_color_gradientn(colors = colors, name = gene)
+      ggplot2::scale_color_gradient2(
+        low = colors[[1L]],
+        mid = middle_color,
+        high = colors[[length(colors)]],
+        midpoint = 0,
+        limits = c(-color_limit, color_limit),
+        name = paste(gene, "PFlog")
+      )
   } else {
     palette <- discrete_palette(bundle, color_by, data$color_value)
     plot <- plot +
@@ -526,7 +550,7 @@ make_gene_comparison_plot <- function(comparison) {
   make_expression_dot_plot(long, group_label = NULL)
 }
 
-make_expression_dot_plot <- function(data, group_label) {
+make_expression_dot_plot <- function(data, group_label, rotate_x = FALSE) {
   if (nrow(data) == 0L) {
     return(NULL)
   }
@@ -536,11 +560,7 @@ make_expression_dot_plot <- function(data, group_label) {
   if (!is.factor(data$group)) {
     data$group <- factor(data$group, levels = unique(data$group))
   }
-  finite_means <- data$mean_expression[is.finite(data$mean_expression)]
-  color_max <- if (length(finite_means) > 0L) max(finite_means) else 0
-  if (color_max <= 0) {
-    color_max <- 1
-  }
+  color_limit <- expression_color_limit(data$mean_expression)
 
   ggplot2::ggplot(
     data,
@@ -552,19 +572,29 @@ make_expression_dot_plot <- function(data, group_label) {
     )
   ) +
     ggplot2::geom_point(alpha = 0.92, na.rm = TRUE) +
-    ggplot2::scale_color_gradientn(
-      colors = c("#d9e4ed", "#9b8eae", "#b52865"),
-      limits = c(0, color_max)
+    ggplot2::scale_color_gradient2(
+      low = "#2166AC",
+      mid = "#BDBDBD",
+      high = "#E31A8C",
+      midpoint = 0,
+      limits = c(-color_limit, color_limit)
     ) +
     ggplot2::scale_size_continuous(
       range = c(2, 9),
       limits = c(0, 100),
       breaks = c(0, 50, 100)
     ) +
+    ggplot2::guides(
+      color = ggplot2::guide_colorbar(
+        title.position = "top",
+        barwidth = grid::unit(4, "cm")
+      ),
+      size = ggplot2::guide_legend(title.position = "top", nrow = 1)
+    ) +
     ggplot2::labs(
       x = group_label,
       y = NULL,
-      color = "Mean expression",
+      color = "Mean PFlog",
       size = "Detected (%)"
     ) +
     ggplot2::guides(
@@ -585,11 +615,255 @@ make_expression_dot_plot <- function(data, group_label) {
       legend.box = "vertical",
       legend.box.just = "left",
       legend.justification = "left",
+      axis.text.x = ggplot2::element_text(
+        face = "bold",
+        color = "#17232b",
+        angle = if (isTRUE(rotate_x)) 30 else 0,
+        hjust = if (isTRUE(rotate_x)) 1 else 0.5
+      )
+    )
+}
+
+make_group_summary_plot <- function(
+  summary,
+  group_column,
+  group_label,
+  rotate_x = FALSE
+) {
+  data <- group_summary_plot_data(summary, group_column)
+  make_expression_dot_plot(data, group_label, rotate_x = rotate_x)
+}
+
+prepare_marker_overview <- function(
+  bundle,
+  marker_cluster,
+  top_n = 8L
+) {
+  top_n <- max(1L, as.integer(top_n))
+  marker_cluster <- compact_character(marker_cluster)
+  empty <- data.frame(
+    gene = character(),
+    cluster = character(),
+    cell_count = integer(),
+    mean_expression = numeric(),
+    median_expression = numeric(),
+    detected_n = integer(),
+    detected_pct = numeric(),
+    marker_rank = integer(),
+    within_gene_mean = numeric(),
+    stringsAsFactors = FALSE
+  )
+  if (length(marker_cluster) == 0L) {
+    return(empty)
+  }
+
+  markers <- bundle$markers[
+    as.character(bundle$markers$cluster) == marker_cluster[[1L]],
+    ,
+    drop = FALSE
+  ]
+  markers <- markers[order(markers$rank, markers$gene), , drop = FALSE]
+  markers <- markers[!duplicated(casefold_key(markers$gene)), , drop = FALSE]
+  if (nrow(markers) == 0L) {
+    return(empty)
+  }
+  markers <- utils::head(markers, top_n)
+  genes <- as.character(markers$gene)
+  gene_index <- match(genes, bundle_gene_names(bundle))
+  expression <- expression_matrix(bundle, genes)
+  counts <- bundle$counts[, gene_index, drop = FALSE]
+  colnames(counts) <- genes
+
+  result <- group_expression_summary(
+    expression,
+    counts,
+    bundle$cells$cluster,
+    "cluster"
+  )
+  result$marker_rank <- as.integer(markers$rank[
+    match(result$gene, markers$gene)
+  ])
+  result$within_gene_mean <- ave(
+    result$mean_expression,
+    result$gene,
+    FUN = function(values) {
+      finite <- is.finite(values)
+      scaled <- rep(NA_real_, length(values))
+      if (!any(finite)) {
+        return(scaled)
+      }
+      limits <- range(values[finite])
+      if (diff(limits) <= .Machine$double.eps^0.5) {
+        scaled[finite] <- 0.5
+      } else {
+        scaled[finite] <- (values[finite] - limits[[1L]]) / diff(limits)
+      }
+      scaled
+    }
+  )
+  result$cluster <- as.character(result$cluster)
+  result <- result[order(
+    result$marker_rank,
+    match(result$cluster, sort(unique(result$cluster)))
+  ), , drop = FALSE]
+  rownames(result) <- NULL
+  result
+}
+
+marker_overview_height <- function(gene_count) {
+  gene_count <- max(0L, as.integer(gene_count %||% 0L))
+  as.integer(max(360L, min(620L, 210L + 32L * gene_count)))
+}
+
+make_marker_overview_plot <- function(data) {
+  if (nrow(data) == 0L) {
+    return(NULL)
+  }
+  cluster_values <- unique(as.character(data$cluster))
+  numeric_clusters <- suppressWarnings(as.numeric(cluster_values))
+  cluster_levels <- if (all(!is.na(numeric_clusters))) {
+    as.character(sort(numeric_clusters))
+  } else {
+    sort(cluster_values)
+  }
+  gene_order <- unique(data$gene[order(data$marker_rank)])
+  data$cluster <- factor(as.character(data$cluster), levels = cluster_levels)
+  data$gene <- factor(as.character(data$gene), levels = rev(gene_order))
+
+  ggplot2::ggplot(
+    data,
+    ggplot2::aes(
+      x = cluster,
+      y = gene,
+      color = within_gene_mean,
+      size = detected_pct
+    )
+  ) +
+    ggplot2::geom_point(alpha = 0.94, na.rm = TRUE) +
+    ggplot2::scale_color_gradientn(
+      colors = c("#e4ebef", "#8b86aa", "#9d2857"),
+      limits = c(0, 1)
+    ) +
+    ggplot2::scale_size_continuous(
+      range = c(2, 9),
+      limits = c(0, 100),
+      breaks = c(0, 50, 100)
+    ) +
+    ggplot2::labs(
+      x = "Final cluster",
+      y = NULL,
+      color = "Relative mean\n(within gene)",
+      size = "Detected (%)"
+    ) +
+    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme(
+      panel.grid.major = ggplot2::element_line(color = "#e8ecef"),
+      panel.grid.minor = ggplot2::element_blank(),
+      legend.position = "top",
+      legend.box = "vertical",
       axis.text.x = ggplot2::element_text(face = "bold", color = "#17232b")
     )
 }
 
-make_group_summary_plot <- function(summary, group_column, group_label) {
-  data <- group_summary_plot_data(summary, group_column)
-  make_expression_dot_plot(data, group_label)
+prepare_cluster_composition <- function(bundle) {
+  samples <- unique(as.character(bundle$cells$sample))
+  clusters <- unique(as.character(bundle$cells$cluster))
+  numeric_clusters <- suppressWarnings(as.numeric(clusters))
+  if (all(!is.na(numeric_clusters))) {
+    clusters <- as.character(sort(numeric_clusters))
+  } else {
+    clusters <- sort(clusters)
+  }
+  grid <- expand.grid(
+    sample = samples,
+    cluster = clusters,
+    stringsAsFactors = FALSE
+  )
+  observed <- table(
+    factor(as.character(bundle$cells$sample), levels = samples),
+    factor(as.character(bundle$cells$cluster), levels = clusters)
+  )
+  grid$cell_count <- as.integer(observed[cbind(
+    match(grid$sample, rownames(observed)),
+    match(grid$cluster, colnames(observed))
+  )])
+  sample_totals <- table(
+    factor(as.character(bundle$cells$sample), levels = samples)
+  )
+  grid$sample_total <- as.integer(sample_totals[grid$sample])
+  grid$cell_pct <- 100 * safe_ratio(grid$cell_count, grid$sample_total)
+
+  sample_lookup <- unique(bundle$cells[c("sample", "condition")])
+  grid$condition <- as.character(sample_lookup$condition[
+    match(grid$sample, as.character(sample_lookup$sample))
+  ])
+  condition_levels <- unique(as.character(bundle$cells$condition))
+  grid$condition <- factor(grid$condition, levels = condition_levels)
+  grid$sample <- factor(grid$sample, levels = samples)
+  grid$cluster <- factor(grid$cluster, levels = rev(clusters))
+  grid
+}
+
+make_cluster_composition_plot <- function(data, bundle) {
+  if (nrow(data) == 0L) {
+    return(NULL)
+  }
+  condition_levels <- unique(as.character(bundle$cells$condition))
+  data$condition <- factor(as.character(data$condition), levels = condition_levels)
+  data$tile_label <- paste0(
+    format(data$cell_count, big.mark = ","),
+    "\n",
+    formatC(data$cell_pct, digits = 1L, format = "f"),
+    "%"
+  )
+  threshold <- 0.62 * max(data$cell_pct, na.rm = TRUE)
+  data$text_color <- ifelse(data$cell_pct >= threshold, "white", "#17232b")
+
+  ggplot2::ggplot(
+    data,
+    ggplot2::aes(x = sample, y = cluster, fill = cell_pct)
+  ) +
+    ggplot2::geom_tile(color = "#fffefb", linewidth = 0.8) +
+    ggplot2::geom_text(
+      ggplot2::aes(label = tile_label, color = text_color),
+      lineheight = 0.92,
+      size = 3,
+      show.legend = FALSE
+    ) +
+    ggplot2::scale_color_identity() +
+    ggplot2::scale_fill_gradientn(
+      colors = c("#eef2f4", "#8c91ad", "#9d2857"),
+      name = "% of sample"
+    ) +
+    ggplot2::facet_grid(
+      cols = ggplot2::vars(condition),
+      scales = "free_x",
+      space = "free_x"
+    ) +
+    ggplot2::labs(
+      x = "Biological sample",
+      y = "Final cluster",
+      caption = paste(
+        "Counts and percentages describe recovered cells only;\n",
+        "no differential-abundance test is performed.",
+        sep = ""
+      )
+    ) +
+    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      panel.spacing.x = grid::unit(0.8, "lines"),
+      strip.text = ggplot2::element_text(face = "bold", color = "#17232b"),
+      axis.text.x = ggplot2::element_text(
+        angle = 32,
+        hjust = 1,
+        vjust = 1,
+        color = "#17232b"
+      ),
+      plot.caption = ggplot2::element_text(
+        color = "#526b7b",
+        hjust = 0
+      ),
+      legend.position = "top"
+    )
 }

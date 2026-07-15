@@ -28,9 +28,7 @@ espiviz_contract <- function() {
     primary_de_rows = 24601L,
     primary_de_design = "primary_unpaired_condition",
     primary_de_contrast = "estim_vs_control",
-    top_markers_per_cluster = 25L,
-    normalization_scale = 10000,
-    normalization_tolerance = 1e-8
+    top_markers_per_cluster = 25L
   )
 }
 
@@ -171,64 +169,54 @@ espiviz_require_columns <- function(data, required, label) {
   invisible(data)
 }
 
-espiviz_validate_normalization <- function(
-  counts,
-  normalized,
-  scale_factor = 10000,
-  tolerance = 1e-8,
-  sample_genes = 64L,
-  sample_cells = 128L
-) {
-  if (!identical(dim(counts), dim(normalized))) {
-    espiviz_abort("RNA counts and data layers have different dimensions.")
-  }
-  if (!identical(dimnames(counts), dimnames(normalized))) {
-    espiviz_abort(
-      "RNA counts and data layers have different feature or cell order."
-    )
+espiviz_pflog_normalization <- function(counts) {
+  espiviz_require("Matrix")
+  espiviz_require("scclrR")
+  if (!inherits(counts, "sparseMatrix")) {
+    espiviz_abort("PFlog normalization requires a sparse count matrix.")
   }
 
-  gene_index <- unique(as.integer(round(seq(
-    from = 1L,
-    to = nrow(counts),
-    length.out = min(sample_genes, nrow(counts))
-  ))))
-  cell_index <- unique(as.integer(round(seq(
-    from = 1L,
-    to = ncol(counts),
-    length.out = min(sample_cells, ncol(counts))
-  ))))
-  library_size <- Matrix::colSums(counts)
-  observed <- as.matrix(normalized[gene_index, cell_index, drop = FALSE])
-  sampled_counts <- as.matrix(counts[gene_index, cell_index, drop = FALSE])
-  expected <- log1p(
-    sweep(
-      sampled_counts,
-      MARGIN = 2L,
-      STATS = library_size[cell_index],
-      FUN = "/"
-    ) *
-      scale_factor
+  normalized <- scclrR::normalize_matrix(
+    counts,
+    target = "auto",
+    log1p = TRUE,
+    center = TRUE
   )
-  max_abs_error <- max(abs(observed - expected))
-
-  if (!is.finite(max_abs_error) || max_abs_error > tolerance) {
-    espiviz_abort(
-      paste0(
-        "RNA data layer does not match log1p(%s * count / library size); ",
-        "sampled maximum absolute error was %.3g (tolerance %.3g)."
-      ),
-      format(scale_factor, scientific = FALSE),
-      max_abs_error,
-      tolerance
-    )
+  if (
+    !is.list(normalized) ||
+      !inherits(normalized$sparse, "sparseMatrix") ||
+      !identical(dim(normalized$sparse), dim(counts)) ||
+      !identical(dimnames(normalized$sparse), dimnames(counts)) ||
+      length(normalized$center) != ncol(counts) ||
+      any(!is.finite(normalized$center)) ||
+      length(normalized$alpha) != 1L ||
+      !is.finite(normalized$alpha) ||
+      normalized$alpha <= 0 ||
+      length(normalized$k) != 1L ||
+      !is.finite(normalized$k) ||
+      normalized$k <= 0
+  ) {
+    espiviz_abort("scclrR returned an invalid PFlog normalization result.")
   }
 
+  description <- utils::packageDescription("scclrR")
+  remote_sha <- description$RemoteSha %||%
+    description$GithubSHA1 %||%
+    NA_character_
   list(
-    genes_checked = length(gene_index),
-    cells_checked = length(cell_index),
-    max_abs_error = unname(max_abs_error),
-    tolerance = tolerance
+    method = "scclrR::normalize_matrix",
+    target = "auto",
+    log1p = TRUE,
+    centered = TRUE,
+    alpha = unname(as.numeric(normalized$alpha)),
+    scale = unname(4 * as.numeric(normalized$alpha)),
+    k = unname(as.numeric(normalized$k)),
+    cell_count = ncol(counts),
+    gene_count = nrow(counts),
+    center_min = unname(min(normalized$center)),
+    center_max = unname(max(normalized$center)),
+    package_version = as.character(utils::packageVersion("scclrR")),
+    package_remote_sha = as.character(remote_sha)
   )
 }
 
@@ -264,15 +252,12 @@ espiviz_extract_source <- function(object, contract = espiviz_contract()) {
 
   assay <- object[["RNA"]]
   layers <- SeuratObject::Layers(assay)
-  if (!all(c("counts", "data") %in% layers)) {
-    espiviz_abort("RNA assay must contain counts and data layers.")
+  if (!"counts" %in% layers) {
+    espiviz_abort("RNA assay must contain a counts layer.")
   }
   counts <- SeuratObject::LayerData(assay, layer = "counts")
-  normalized <- SeuratObject::LayerData(assay, layer = "data")
-  if (
-    !inherits(counts, "sparseMatrix") || !inherits(normalized, "sparseMatrix")
-  ) {
-    espiviz_abort("RNA counts and data layers must be sparse matrices.")
+  if (!inherits(counts, "sparseMatrix")) {
+    espiviz_abort("RNA counts must be a sparse matrix.")
   }
   if (any(!is.finite(counts@x)) || any(counts@x < 0)) {
     espiviz_abort("RNA counts contain non-finite or negative values.")
@@ -356,12 +341,7 @@ espiviz_extract_source <- function(object, contract = espiviz_contract()) {
   if (any(!is.finite(library_size)) || any(library_size <= 0)) {
     espiviz_abort("Cell library sizes must be finite and greater than zero.")
   }
-  normalization_check <- espiviz_validate_normalization(
-    counts = counts,
-    normalized = normalized,
-    scale_factor = contract$normalization_scale,
-    tolerance = contract$normalization_tolerance
-  )
+  normalization_check <- espiviz_pflog_normalization(counts)
 
   internal_ids <- sprintf(
     paste0("cell_%0", nchar(as.character(contract$cells)), "d"),
@@ -735,7 +715,13 @@ espiviz_palette <- function() {
 }
 
 espiviz_software_versions <- function() {
-  packages <- c("Matrix", "SeuratObject", "AnnotationDbi", "org.Mm.eg.db")
+  packages <- c(
+    "Matrix",
+    "SeuratObject",
+    "scclrR",
+    "AnnotationDbi",
+    "org.Mm.eg.db"
+  )
   package_versions <- stats::setNames(
     lapply(packages, function(package) {
       if (requireNamespace(package, quietly = TRUE)) {
@@ -878,7 +864,15 @@ espiviz_validate_public_bundle <- function(
 
   espiviz_require_columns(
     bundle$primary_de,
-    c("gene", "design", "contrast", "log2FoldChange", "pvalue", "padj"),
+    c(
+      "gene",
+      "baseMean",
+      "design",
+      "contrast",
+      "log2FoldChange",
+      "pvalue",
+      "padj"
+    ),
     "Bundle primary_de"
   )
   if (
@@ -901,6 +895,14 @@ espiviz_validate_public_bundle <- function(
   }
   if (anyNA(bundle$primary_de$gene) || anyDuplicated(bundle$primary_de$gene)) {
     espiviz_abort("Bundle primary_de genes must be complete and unique.")
+  }
+  if (
+    !is.numeric(bundle$primary_de$baseMean) ||
+      anyNA(bundle$primary_de$baseMean) ||
+      any(!is.finite(bundle$primary_de$baseMean)) ||
+      any(bundle$primary_de$baseMean < 0)
+  ) {
+    espiviz_abort("Bundle primary_de baseMean values must be finite and non-negative.")
   }
 
   if (
@@ -934,6 +936,38 @@ espiviz_validate_public_bundle <- function(
   }
   if (!identical(names(bundle$pathway_genes), c("pathway_id", "gene"))) {
     espiviz_abort("Bundle pathway_genes schema is invalid.")
+  }
+  if (
+    nrow(bundle$pathways) == 0L ||
+      anyNA(bundle$pathways$pathway_id) ||
+      any(!nzchar(as.character(bundle$pathways$pathway_id))) ||
+      anyDuplicated(as.character(bundle$pathways$pathway_id)) ||
+      anyNA(bundle$pathways$label) ||
+      any(!nzchar(as.character(bundle$pathways$label))) ||
+      anyDuplicated(as.character(bundle$pathways$label))
+  ) {
+    espiviz_abort(
+      "Bundle pathways must contain complete, unique IDs and labels."
+    )
+  }
+  if (
+    any(!as.character(bundle$pathways$source) %in% c("GSEA", "ORA")) ||
+      any(
+        !as.character(bundle$pathways$direction) %in% c("Control", "E-Stim")
+      ) ||
+      !is.numeric(bundle$pathways$p_adjust) ||
+      anyNA(bundle$pathways$p_adjust) ||
+      any(!is.finite(bundle$pathways$p_adjust)) ||
+      any(bundle$pathways$p_adjust < 0 | bundle$pathways$p_adjust > 1) ||
+      !is.numeric(bundle$pathways$score) ||
+      anyNA(bundle$pathways$score) ||
+      any(!is.finite(bundle$pathways$score)) ||
+      !is.numeric(bundle$pathways$gene_count) ||
+      anyNA(bundle$pathways$gene_count) ||
+      any(!is.finite(bundle$pathways$gene_count)) ||
+      any(bundle$pathways$gene_count < 0)
+  ) {
+    espiviz_abort("Bundle pathway statistics are invalid.")
   }
   if (any(!bundle$pathway_genes$pathway_id %in% bundle$pathways$pathway_id)) {
     espiviz_abort("Bundle pathway_genes contain unknown pathways.")
@@ -1067,7 +1101,10 @@ espiviz_build_bundle <- function(manifest_path, contract = espiviz_contract()) {
       cluster_column = contract$cluster_column,
       assay = "RNA",
       count_layer = "counts",
-      normalization = "log1p(10000 * count / cell library size)",
+      normalization = paste(
+        "scclrR PFlog (target = 'auto', log1p = TRUE, center = TRUE);",
+        "dense expression = shifted sparse value - cell center"
+      ),
       normalization_check = source$normalization_check,
       dimensions = list(
         genes = nrow(source$genes),

@@ -22,6 +22,8 @@ if (file.exists(exporter_file)) {
 }
 
 required_app_helpers <- c(
+  "compute_pflog_state",
+  "pflog_state",
   "normalize_gene_expression",
   "parse_gene_input",
   "paginate_genes",
