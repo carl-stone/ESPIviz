@@ -186,14 +186,18 @@ test_that("cluster composition keeps zero-count sample-cluster combinations", {
   expect_silent(ggplot2::ggplot_build(plot))
 })
 
-test_that("differential-expression data distinguishes direction and missing FDR", {
+test_that("differential-expression data groups missing FDR with non-significant genes", {
   expect_app_helper("prepare_de_plot_data")
   primary_de <- synthetic_bundle()$primary_de
   primary_de$padj[primary_de$gene == "Other"] <- NA_real_
 
   expect_identical(
     unname(de_significance_symbols()),
-    c("square", "circle", "triangle-up", "x")
+    c("square", "circle", "triangle-up")
+  )
+  expect_identical(
+    unname(de_significance_symbols("volcano")),
+    c("square", "circle", "x", "triangle-up")
   )
 
   observed <- prepare_de_plot_data(primary_de, fdr_threshold = 0.05)
@@ -211,12 +215,20 @@ test_that("differential-expression data distinguishes direction and missing FDR"
     c(
       "Higher in Control",
       "Not significant",
-      "Higher with E-Stim",
-      "Adjusted P unavailable"
+      "Higher with E-Stim"
     )
   )
   expect_identical(
     as.character(observed$significance),
+    c(
+      "Higher with E-Stim",
+      "Not significant",
+      "Higher in Control",
+      "Not significant"
+    )
+  )
+  expect_identical(
+    as.character(de_plot_status(observed, "volcano")),
     c(
       "Higher with E-Stim",
       "Not significant",
@@ -232,9 +244,44 @@ test_that("differential-expression data distinguishes direction and missing FDR"
       "Higher with E-Stim",
       "Not significant",
       "Not significant",
-      "Adjusted P unavailable"
+      "Not significant"
     )
   )
+})
+
+test_that("differential-expression table projects readable result columns", {
+  expect_app_helper("prepare_de_table_data")
+  primary_de <- synthetic_bundle()$primary_de
+
+  observed <- prepare_de_table_data(primary_de)
+
+  expect_identical(
+    names(observed),
+    c(
+      "Gene",
+      "Base Mean",
+      "log2FC",
+      "LFC SE",
+      "Adjusted P",
+      "Mean Count Control",
+      "Mean Count E-Stim"
+    )
+  )
+  expect_identical(observed$Gene, primary_de$gene)
+  expect_identical(observed$`Base Mean`, primary_de$baseMean)
+  expect_identical(observed$log2FC, primary_de$log2FoldChange)
+  expect_identical(observed$`LFC SE`, primary_de$lfcSE)
+  expect_identical(observed$`Adjusted P`, primary_de$padj)
+  expect_identical(
+    observed$`Mean Count Control`,
+    primary_de$mean_count_control
+  )
+  expect_identical(
+    observed$`Mean Count E-Stim`,
+    primary_de$mean_count_estim
+  )
+  expect_true(all(c("stat", "pvalue", "design") %in% names(primary_de)))
+  expect_false(any(c("stat", "pvalue", "design") %in% names(observed)))
 })
 
 test_that("MA and volcano plots retain one clickable key per gene", {
@@ -264,10 +311,18 @@ test_that("MA and volcano plots retain one clickable key per gene", {
     expect_setequal(points$key, primary_de$gene)
   }
   ma_built <- plotly::plotly_build(ma)
+  expect_identical(ma_built$x$layout$legend$title$text, "MA category")
   ma_symbols <- unlist(lapply(ma_built$x$data, function(trace) {
     trace$marker$symbol %||% character()
   }), use.names = FALSE)
-  expect_true(all(c("square", "circle", "triangle-up", "x") %in% ma_symbols))
+  expect_true(all(c("square", "circle", "triangle-up") %in% ma_symbols))
+  expect_false("x" %in% ma_symbols)
+  volcano_built <- plotly::plotly_build(volcano)
+  expect_identical(volcano_built$x$layout$legend$title$text, "FDR status")
+  volcano_symbols <- unlist(lapply(volcano_built$x$data, function(trace) {
+    trace$marker$symbol %||% character()
+  }), use.names = FALSE)
+  expect_true("x" %in% volcano_symbols)
 
   ma_mcm2 <- ma_points[ma_points$key == "Mcm2", , drop = FALSE]
   expect_equal(ma_mcm2$x, 75 + 1)
@@ -297,7 +352,12 @@ test_that("MA and volcano plots retain one clickable key per gene", {
       function(layer) nrow(layer) == nrow(primary_de) && "shape" %in% names(layer),
       built$data
     )[[1L]]
-    expect_setequal(unique(full_point_layer$shape), c(15, 16, 17, 4))
+    expected_shapes <- if (identical(view, "ma")) {
+      c(15, 16, 17)
+    } else {
+      c(4, 15, 16, 17)
+    }
+    expect_setequal(unique(full_point_layer$shape), expected_shapes)
   }
 })
 

@@ -133,6 +133,132 @@ h3,
   display: block;
 }
 
+.umap-side-rail {
+  align-content: start;
+  display: grid;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.umap-side-rail .card {
+  margin: 0;
+}
+
+.selection-card-compact .card-body,
+.selection-summary-card .card-body,
+.selection-download-card .card-body {
+  padding: 0.85rem;
+}
+
+.selection-card-compact .selection-overview {
+  margin: 0 0 0.55rem;
+}
+
+.selection-card-compact .selection-count strong {
+  font-size: 1.8rem;
+}
+
+.selection-card-compact .selection-instruction {
+  font-size: 0.76rem;
+  margin-bottom: 0.75rem;
+}
+
+.selection-card-compact .card-section-title {
+  margin-bottom: 0.45rem;
+}
+
+.selection-card-compact .form-group {
+  margin-bottom: 0.45rem;
+}
+
+.selection-snapshot-heading {
+  align-items: baseline;
+  display: flex;
+  gap: 0.55rem;
+  justify-content: space-between;
+}
+
+.selection-snapshot-heading strong {
+  color: var(--accent);
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.05rem;
+}
+
+.selection-snapshot-heading span,
+.selection-snapshot-meta {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.selection-snapshot-meta {
+  border-bottom: 1px solid var(--rule);
+  margin-top: 0.15rem;
+  padding-bottom: 0.55rem;
+}
+
+.selection-snapshot-gene {
+  display: grid;
+  gap: 0.1rem;
+  grid-template-columns: minmax(5rem, 0.8fr) 1fr;
+  padding-top: 0.55rem;
+}
+
+.selection-snapshot-gene strong {
+  grid-row: 1 / span 2;
+}
+
+.selection-snapshot-gene span {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+
+.blend-legend {
+  border-top: 1px solid var(--rule);
+  display: grid;
+  gap: 0.35rem 0.65rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 0.7rem;
+  padding-top: 0.65rem;
+}
+
+.blend-legend-item {
+  align-items: center;
+  color: var(--ink-soft);
+  display: flex;
+  font-size: 0.7rem;
+  gap: 0.35rem;
+  line-height: 1.2;
+}
+
+.blend-swatch {
+  border: 1px solid rgba(23, 35, 43, 0.35);
+  border-radius: 50%;
+  flex: 0 0 0.72rem;
+  height: 0.72rem;
+  width: 0.72rem;
+}
+
+.compact-downloads {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.sidebar-help {
+  color: var(--ink-soft);
+  font-size: 0.73rem;
+  line-height: 1.35;
+  margin: -0.45rem 0 0.6rem;
+}
+
+.plot-empty {
+  background: var(--paper);
+  border: 1px dashed var(--rule);
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  padding: 1.25rem;
+}
+
 .selection-overview {
   margin: 0.5rem 0 0.75rem;
 }
@@ -516,6 +642,17 @@ table.dataTable thead th {
 
   .explore-grid > .bslib-grid-item {
     grid-column: 1 / -1 !important;
+  }
+
+  .umap-side-rail {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .umap-side-rail,
+  .blend-legend {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

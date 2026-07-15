@@ -1,0 +1,360 @@
+test_that("plot-gene data keeps two canonical genes, PFlog, and raw detection", {
+  expect_app_helper("normalize_plot_genes")
+  expect_app_helper("prepare_plot_gene_data")
+  bundle <- synthetic_bundle()
+
+  expect_identical(
+    normalize_plot_genes(bundle, c("egfp", "Glul", "Mcm2"), "Other"),
+    c("EGFP", "Glul")
+  )
+  expect_identical(
+    normalize_plot_genes(bundle, character(), "Other"),
+    "Other"
+  )
+
+  observed <- prepare_plot_gene_data(
+    bundle,
+    c("Glul", "EGFP"),
+    selected_cell_ids = c("cell_1", "not-a-cell")
+  )
+
+  expect_identical(attr(observed, "genes"), c("Glul", "EGFP"))
+  expect_equal(nrow(observed), nrow(bundle$cells))
+  expect_identical(observed$cell_id, bundle$cells$cell_id)
+  expect_equal(
+    observed$expression_1,
+    as.numeric(expression_matrix(bundle, "Glul")[, 1L])
+  )
+  expect_equal(
+    observed$expression_2,
+    as.numeric(expression_matrix(bundle, "EGFP")[, 1L])
+  )
+  expect_identical(
+    observed$detected_1,
+    unname(bundle$counts[, "Glul"] > 0)
+  )
+  expect_identical(
+    observed$detected_2,
+    unname(bundle$counts[, "EGFP"] > 0)
+  )
+  expect_identical(observed$selected, bundle$cells$cell_id == "cell_1")
+
+  low_detected <- observed[observed$cell_id == "cell_6", , drop = FALSE]
+  expect_true(low_detected$detected_2)
+  expect_lt(low_detected$expression_2, 0)
+})
+
+test_that("two-gene blend uses raw double-negative status and named colors", {
+  expect_app_helper("prepare_umap_blend_data")
+  expect_app_helper("blend_legend_ui")
+  bundle <- synthetic_bundle()
+  gene_data <- prepare_plot_gene_data(bundle, c("Glul", "EGFP"))
+
+  observed <- prepare_umap_blend_data(gene_data)
+  classes <- stats::setNames(observed$blend_class, observed$cell_id)
+
+  expect_identical(classes[["cell_1"]], "Glul detected")
+  expect_identical(classes[["cell_2"]], "EGFP detected")
+  expect_identical(classes[["cell_3"]], "Both detected")
+  expect_identical(classes[["cell_4"]], "Neither detected")
+  expect_identical(classes[["cell_6"]], "EGFP detected")
+  expect_true(all(grepl("^#[0-9A-F]{6}$", observed$blend_color)))
+  expect_identical(
+    observed$blend_color[observed$cell_id == "cell_4"],
+    unname(blend_palette()[["Neither detected"]])
+  )
+  expect_true(all(observed$blend_strength >= 0))
+  expect_true(all(observed$blend_strength <= 2))
+
+  legend <- htmltools::renderTags(blend_legend_ui(c("Glul", "EGFP")))$html
+  for (label in c(
+    "Neither detected",
+    "Glul detected",
+    "EGFP detected",
+    "Both detected"
+  )) {
+    expect_match(legend, label, fixed = TRUE)
+  }
+  expect_match(legend, 'role="list"', fixed = TRUE)
+})
+
+test_that("interactive and download UMAPs render a two-gene blend", {
+  bundle <- synthetic_bundle()
+  genes <- c("Glul", "EGFP")
+
+  interactive <- plotly::plotly_build(make_umap_plotly(
+    bundle = bundle,
+    color_by = "expression",
+    gene = genes,
+    selected_cell_ids = character(),
+    source = "blend_umap_test"
+  ))
+  cell_traces <- Filter(
+    function(trace) {
+      identical(trace$type, "scattergl") && length(trace$key %||% character()) > 0L
+    },
+    interactive$x$data
+  )
+  expect_length(cell_traces, 1L)
+  expect_setequal(as.character(cell_traces[[1L]]$key), bundle$cells$cell_id)
+  expect_identical(anyDuplicated(as.character(cell_traces[[1L]]$key)), 0L)
+  expect_false(isTRUE(cell_traces[[1L]]$marker$showscale))
+  expect_true(all(grepl("Raw detected", cell_traces[[1L]]$text, fixed = TRUE)))
+
+  download <- make_umap_ggplot(
+    bundle = bundle,
+    color_by = "expression",
+    gene = genes,
+    selected_cell_ids = character()
+  )
+  expect_s3_class(download, "ggplot")
+  built <- ggplot2::ggplot_build(download)
+  expect_equal(nrow(built$data[[1L]]), nrow(bundle$cells))
+  expect_match(download$labels$caption, "Neither detected", fixed = TRUE)
+  expect_match(download$labels$caption, "Both detected", fixed = TRUE)
+})
+
+test_that("cell-level violins retain PFlog values and selected-cell overlays", {
+  expect_app_helper("plot_gene_data_long")
+  expect_app_helper("make_violin_plot")
+  bundle <- synthetic_bundle()
+  gene_data <- prepare_plot_gene_data(
+    bundle,
+    c("Glul", "EGFP"),
+    selected_cell_ids = c("cell_1", "cell_3")
+  )
+
+  long <- plot_gene_data_long(gene_data)
+  expect_equal(nrow(long), 2L * nrow(bundle$cells))
+  expect_setequal(as.character(long$gene), c("Glul", "EGFP"))
+  expect_equal(sum(long$selected), 4L)
+  low_detected <- long[
+    long$cell_id == "cell_6" & as.character(long$gene) == "EGFP",
+    ,
+    drop = FALSE
+  ]
+  expect_true(low_detected$detected)
+  expect_lt(low_detected$expression, 0)
+
+  plot <- make_violin_plot(gene_data, bundle)
+  expect_s3_class(plot, "ggplot")
+  built <- ggplot2::ggplot_build(plot)
+  expect_true(any(vapply(built$data, nrow, integer(1L)) == 4L))
+  expect_match(plot$labels$y, "PFlog", fixed = TRUE)
+  expect_match(plot$labels$caption, "raw counts", fixed = TRUE)
+})
+
+test_that("two-gene PFlog scatter excludes double-negative cells", {
+  expect_app_helper("gene_pair_scope")
+  expect_app_helper("gene_pair_scope_ui")
+  expect_app_helper("make_gene_pair_plotly")
+  bundle <- synthetic_bundle()
+  gene_data <- prepare_plot_gene_data(
+    bundle,
+    c("Glul", "EGFP"),
+    selected_cell_ids = c("cell_1", "cell_3")
+  )
+
+  built <- plotly::plotly_build(make_gene_pair_plotly(
+    gene_data,
+    bundle,
+    source = "pair_scatter_test"
+  ))
+  traces <- Filter(
+    function(trace) identical(trace$type, "scattergl"),
+    built$x$data
+  )
+  keys <- unlist(lapply(traces, function(trace) {
+    as.character(trace$key %||% character())
+  }), use.names = FALSE)
+  scope <- gene_pair_scope(gene_data)
+  expect_equal(scope$included_n, 5L)
+  expect_equal(scope$excluded_n, 1L)
+  expect_equal(scope$excluded_pct, 100 / 6)
+  expect_equal(length(keys), scope$included_n)
+  expect_identical(anyDuplicated(keys), 0L)
+  expect_setequal(keys, bundle$cells$cell_id[scope$included])
+  expect_false("cell_4" %in% keys)
+  expect_setequal(
+    sub("^Cluster ", "", vapply(traces, `[[`, character(1L), "name")),
+    c("0", "1", "2")
+  )
+  expect_true(all(unlist(lapply(traces, function(trace) {
+    grepl("Raw detected", trace$text, fixed = TRUE)
+  }))))
+  expect_true(all(unlist(lapply(traces, function(trace) {
+    grepl("Explicitly selected", trace$text, fixed = TRUE)
+  }))))
+
+  cell_6_trace <- traces[vapply(traces, function(trace) {
+    "cell_6" %in% as.character(trace$key %||% character())
+  }, logical(1L))][[1L]]
+  cell_6_index <- match("cell_6", as.character(cell_6_trace$key))
+  expect_lt(as.numeric(cell_6_trace$y[[cell_6_index]]), 0)
+  expect_match(built$x$layout$xaxis$title$text, "Glul PFlog", fixed = TRUE)
+  expect_match(built$x$layout$yaxis$title$text, "EGFP PFlog", fixed = TRUE)
+  scope_html <- htmltools::renderTags(gene_pair_scope_ui(scope))$html
+  expect_match(scope_html, "Showing 5 of 6 cells", fixed = TRUE)
+  expect_match(scope_html, "artificial diagonal", fixed = TRUE)
+
+  single <- prepare_plot_gene_data(bundle, "Glul")
+  expect_null(make_gene_pair_plotly(single, bundle, "single_gene_test"))
+})
+
+test_that("selection snapshot is compact and uses raw-count detection", {
+  expect_app_helper("prepare_selection_snapshot")
+  expect_app_helper("selection_snapshot_ui")
+  bundle <- synthetic_bundle()
+  gene_data <- prepare_plot_gene_data(
+    bundle,
+    c("Glul", "EGFP"),
+    selected_cell_ids = c("cell_1", "cell_3")
+  )
+
+  observed <- prepare_selection_snapshot(gene_data)
+  expect_true(observed$explicit_selection)
+  expect_equal(observed$selected_n, 2L)
+  expect_equal(observed$total_n, 6L)
+  expect_equal(observed$selected_pct, 100 * 2 / 6)
+  expect_equal(observed$cluster_n, 2L)
+  expect_equal(observed$sample_n, 2L)
+
+  glul <- observed$genes[observed$genes$gene == "Glul", , drop = FALSE]
+  expected_glul <- expression_matrix(bundle, "Glul")[c(1L, 3L), 1L]
+  expect_equal(glul$mean_pflog, mean(expected_glul))
+  expect_equal(glul$detected_n, 2L)
+  expect_equal(glul$detected_pct, 100)
+  egfp <- observed$genes[observed$genes$gene == "EGFP", , drop = FALSE]
+  expect_equal(egfp$detected_n, 1L)
+  expect_equal(egfp$detected_pct, 50)
+
+  html <- htmltools::renderTags(selection_snapshot_ui(observed))$html
+  expect_match(html, "2 of 6 cells", fixed = TRUE)
+  expect_match(html, "Mean PFlog", fixed = TRUE)
+  expect_match(html, "detected by raw count", fixed = TRUE)
+  expect_match(html, 'aria-live="polite"', fixed = TRUE)
+
+  all_cells <- prepare_selection_snapshot(prepare_plot_gene_data(bundle, "Glul"))
+  expect_false(all_cells$explicit_selection)
+  expect_equal(all_cells$selected_n, nrow(bundle$cells))
+  expect_equal(all_cells$genes$detected_n, 3L)
+})
+
+test_that("comparison table keeps only interpretable columns with plain headers", {
+  expect_app_helper("prepare_comparison_table")
+  bundle <- synthetic_bundle()
+  selected <- bundle$cells$cell_id[1:2]
+  comparison <- summarize_selection(
+    bundle,
+    selected,
+    c("Glul", "EGFP")
+  )$comparison
+
+  concise <- prepare_comparison_table(comparison, explicit_selection = TRUE)
+  expect_identical(
+    names(concise),
+    c(
+      "gene",
+      "selected_mean",
+      "selected_detected_pct",
+      "remaining_mean",
+      "remaining_detected_pct",
+      "mean_difference",
+      "detection_pp_difference"
+    )
+  )
+  expect_false(any(grepl("median|ratio|_n$", names(concise))))
+  displayed <- summary_datatable(concise)
+  expect_identical(
+    names(displayed$x$data),
+    c(
+      "Gene",
+      "Selected mean PFlog",
+      "Selected detected (%)",
+      "Other cells mean PFlog",
+      "Other cells detected (%)",
+      "Mean difference",
+      "Detection difference (pp)"
+    )
+  )
+
+  all_cells <- prepare_comparison_table(
+    summarize_selection(bundle, character(), "Glul")$comparison,
+    explicit_selection = FALSE
+  )
+  expect_identical(names(all_cells), c("gene", "mean_expression", "detected_pct"))
+  expect_identical(
+    names(summary_datatable(all_cells)$x$data),
+    c("Gene", "Mean PFlog", "Detected (%)")
+  )
+})
+
+test_that("Explore exposes a compact two-gene cell-level workflow", {
+  html <- htmltools::renderTags(
+    explore_ui("explore_test", synthetic_bundle())
+  )$html
+
+  for (label in c(
+    "Second plot gene (optional)",
+    "Current gene is always the first plot gene",
+    "Selected-cell summary",
+    "Cell-level",
+    "PFlog distribution by final cluster",
+    "Two-gene PFlog scatter"
+  )) {
+    expect_match(html, label, fixed = TRUE)
+  }
+  for (id in c(
+    "secondary_gene",
+    "selection_snapshot",
+    "umap_legend",
+    "violin_plot_ui",
+    "gene_pair_plot_ui"
+  )) {
+    expect_match(html, paste0("explore_test-", id), fixed = TRUE)
+  }
+  expect_match(html, 'class="umap-side-rail"', fixed = TRUE)
+})
+
+test_that("optional second plot gene does not mutate global gene state", {
+  bundle <- synthetic_bundle()
+  state <- new_app_state(bundle)
+
+  shiny::testServer(
+    explore_server,
+    args = list(bundle = bundle, state = state),
+    {
+      session$setInputs(
+        active_gene = "Glul",
+        secondary_gene = "EGFP",
+        color_by = "expression"
+      )
+      expect_identical(state$active_gene(), "Glul")
+      expect_identical(state$gene_set(), character())
+      title_html <- htmltools::renderTags(output$umap_title)$html
+      snapshot_html <- htmltools::renderTags(output$selection_snapshot)$html
+      pair_html <- htmltools::renderTags(output$gene_pair_plot_ui)$html
+      expect_match(title_html, "Glul + EGFP blend", fixed = TRUE)
+      expect_match(snapshot_html, "Glul", fixed = TRUE)
+      expect_match(snapshot_html, "EGFP", fixed = TRUE)
+      expect_match(
+        pair_html,
+        paste(
+          "Per-cell PFlog scatter comparing Glul and EGFP colored by final",
+          "cluster for cells detected for at least one gene"
+        ),
+        fixed = TRUE
+      )
+      expect_match(pair_html, "Excluded 1 double-negative cell", fixed = TRUE)
+
+      session$setInputs(active_gene = "Mcm2")
+      expect_identical(state$active_gene(), "Mcm2")
+      expect_identical(state$gene_set(), character())
+      expect_match(
+        htmltools::renderTags(output$umap_title)$html,
+        "Mcm2 + EGFP blend",
+        fixed = TRUE
+      )
+    }
+  )
+})

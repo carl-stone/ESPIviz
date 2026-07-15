@@ -30,6 +30,45 @@ test_that("bundle validation rejects dimension and cell-order drift", {
   )
 })
 
+test_that("bundle validation rejects invalid raw counts and library sizes", {
+  expect_app_helper("validate_bundle")
+  bundle <- synthetic_bundle()
+  expected <- synthetic_expectations(bundle)
+
+  fractional_counts <- bundle
+  fractional_counts$counts@x[[1L]] <- 0.5
+  expect_error(
+    validate_bundle(fractional_counts, expected = expected),
+    "raw counts",
+    fixed = TRUE
+  )
+
+  negative_counts <- bundle
+  negative_counts$counts@x[[1L]] <- -1
+  expect_error(
+    validate_bundle(negative_counts, expected = expected),
+    "raw counts",
+    fixed = TRUE
+  )
+
+  nonfinite_counts <- bundle
+  nonfinite_counts$counts@x[[1L]] <- Inf
+  expect_error(
+    validate_bundle(nonfinite_counts, expected = expected),
+    "raw counts",
+    fixed = TRUE
+  )
+
+  mismatched_library_size <- bundle
+  mismatched_library_size$cells$library_size[[1L]] <-
+    mismatched_library_size$cells$library_size[[1L]] + 1
+  expect_error(
+    validate_bundle(mismatched_library_size, expected = expected),
+    "raw-count row sums",
+    fixed = TRUE
+  )
+})
+
 test_that("bundle validation rejects schema and primary-result drift", {
   expect_app_helper("validate_bundle")
   bundle <- synthetic_bundle()
@@ -59,10 +98,62 @@ test_that("bundle validation rejects schema and primary-result drift", {
     fixed = TRUE
   )
 
+  for (column in c("lfcSE", "mean_count_control", "mean_count_estim")) {
+    missing_display_column <- bundle
+    missing_display_column$primary_de[[column]] <- NULL
+    expect_error(
+      validate_bundle(missing_display_column, expected = expected),
+      "differential-expression",
+      fixed = TRUE,
+      info = paste("Missing required DE display column:", column)
+    )
+  }
+
   invalid_base_mean <- bundle
   invalid_base_mean$primary_de$baseMean[[1L]] <- -1
   expect_error(
     validate_bundle(invalid_base_mean, expected = expected),
+    "differential-expression",
+    fixed = TRUE
+  )
+
+  invalid_log2fc <- bundle
+  invalid_log2fc$primary_de$log2FoldChange[[1L]] <- Inf
+  expect_error(
+    validate_bundle(invalid_log2fc, expected = expected),
+    "differential-expression",
+    fixed = TRUE
+  )
+
+  invalid_lfcse <- bundle
+  invalid_lfcse$primary_de$lfcSE <-
+    as.character(invalid_lfcse$primary_de$lfcSE)
+  expect_error(
+    validate_bundle(invalid_lfcse, expected = expected),
+    "differential-expression",
+    fixed = TRUE
+  )
+
+  invalid_padj <- bundle
+  invalid_padj$primary_de$padj[[1L]] <- -1
+  expect_error(
+    validate_bundle(invalid_padj, expected = expected),
+    "differential-expression",
+    fixed = TRUE
+  )
+
+  invalid_pvalue <- bundle
+  invalid_pvalue$primary_de$pvalue[[1L]] <- 2
+  expect_error(
+    validate_bundle(invalid_pvalue, expected = expected),
+    "differential-expression",
+    fixed = TRUE
+  )
+
+  invalid_mean_count <- bundle
+  invalid_mean_count$primary_de$mean_count_control[[1L]] <- -1
+  expect_error(
+    validate_bundle(invalid_mean_count, expected = expected),
     "differential-expression",
     fixed = TRUE
   )

@@ -3,9 +3,11 @@
 ESPIviz is the public interactive companion to the ESPI single-cell manuscript.
 It provides final-clustering UMAP exploration, gene and gene-set expression
 summaries across clusters, conditions, and biological samples, descriptive
-sample-level cluster composition, marker overviews, the complete primary
+sample-level cluster composition, marker overviews, two-gene UMAP blends,
+cluster violins, per-cell gene-pair scatter plots, the complete primary
 condition-model differential-expression result with MA and volcano views, and a
-short set of manuscript-aligned pathways shown on method-specific score scales.
+curated short set of manuscript-aligned pathways shown on method-specific score
+scales.
 
 **[Open ESPIviz](https://019f6264-f0b5-e432-795c-c2f7e9fd5c95.share.connect.posit.cloud/)**
 
@@ -26,6 +28,12 @@ have a negative PFlog value. Detection percentages always use raw counts. The
 Shiny runtime implements this sparse transformation directly and is tested for
 numerical identity with `scclrR`; it does not install the Rust-backed package in
 the deployment image.
+
+For a two-gene UMAP blend, raw counts determine whether each gene is detected.
+Color intensity then increases with that gene's PFlog strength among detected
+cells; double-negative cells remain neutral and double-positive cells mix the
+two feature colors. Violin and gene-pair scatter plots retain the centered PFlog
+scale and report raw-count detection separately.
 
 The pinned v1.0.0 data asset remains byte-for-byte immutable. It contains the
 raw counts needed for PFlog plus its original release-era normalization label;

@@ -870,8 +870,11 @@ espiviz_validate_public_bundle <- function(
       "design",
       "contrast",
       "log2FoldChange",
+      "lfcSE",
       "pvalue",
-      "padj"
+      "padj",
+      "mean_count_control",
+      "mean_count_estim"
     ),
     "Bundle primary_de"
   )
@@ -903,6 +906,49 @@ espiviz_validate_public_bundle <- function(
       any(bundle$primary_de$baseMean < 0)
   ) {
     espiviz_abort("Bundle primary_de baseMean values must be finite and non-negative.")
+  }
+  if (
+    !is.numeric(bundle$primary_de$log2FoldChange) ||
+      anyNA(bundle$primary_de$log2FoldChange) ||
+      any(!is.finite(bundle$primary_de$log2FoldChange))
+  ) {
+    espiviz_abort("Bundle primary_de log2FoldChange values must be finite.")
+  }
+  if (
+    !is.numeric(bundle$primary_de$lfcSE) ||
+      anyNA(bundle$primary_de$lfcSE) ||
+      any(!is.finite(bundle$primary_de$lfcSE)) ||
+      any(bundle$primary_de$lfcSE < 0)
+  ) {
+    espiviz_abort("Bundle primary_de lfcSE values must be finite and non-negative.")
+  }
+  for (column in c("pvalue", "padj")) {
+    value <- bundle$primary_de[[column]]
+    if (
+      !is.numeric(value) ||
+        any(!is.na(value) & (!is.finite(value) | value < 0 | value > 1))
+    ) {
+      espiviz_abort(paste0(
+        "Bundle primary_de ",
+        column,
+        " values must be missing or finite probabilities from zero to one."
+      ))
+    }
+  }
+  for (column in c("mean_count_control", "mean_count_estim")) {
+    value <- bundle$primary_de[[column]]
+    if (
+      !is.numeric(value) ||
+        anyNA(value) ||
+        any(!is.finite(value)) ||
+        any(value < 0)
+    ) {
+      espiviz_abort(paste0(
+        "Bundle primary_de ",
+        column,
+        " values must be finite and non-negative."
+      ))
+    }
   }
 
   if (

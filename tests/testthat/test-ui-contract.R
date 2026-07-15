@@ -36,6 +36,15 @@ test_that("secondary full-width panels span their plotting grids", {
   expect_match(about_html, 'col-widths-sm="7,5,12"', fixed = TRUE)
 })
 
+test_that("differential-expression table has a meaningful result heading", {
+  html <- htmltools::renderTags(
+    differential_expression_ui("de_test")
+  )$html
+
+  expect_match(html, "Pseudobulk DE results", fixed = TRUE)
+  expect_no_match(html, "Complete primary result", fixed = TRUE)
+})
+
 test_that("Explore limits UMAP colors and exposes every selection mode", {
   expect_app_helper("explore_ui")
   html <- htmltools::renderTags(explore_ui(
@@ -135,6 +144,7 @@ test_that("Explore exposes replicate-aware visualization panels", {
   plot_chunks <- strsplit(source_text, "\n    output$", fixed = TRUE)[[1L]]
   static_plot_ids <- c(
     "gene_comparison_plot",
+    "violin_plot",
     "condition_summary_plot",
     "sample_summary_plot",
     "composition_plot",
@@ -218,6 +228,15 @@ test_that("pathway details render with supported HTML tags", {
   expect_match(gsea_html, "Exported leading-edge genes", fixed = TRUE)
   expect_match(ora_html, "Overlapping genes", fixed = TRUE)
   expect_match(ora_html, "Exported overlapping genes", fixed = TRUE)
+})
+
+test_that("Pathways identifies the bundled terms as a curated subset", {
+  html <- htmltools::renderTags(pathways_ui("pathways_test"))$html
+
+  expect_match(html, "Curated manuscript terms", fixed = TRUE)
+  expect_match(html, "not an exhaustive list", fixed = TRUE)
+  expect_match(html, ">Featured terms<", fixed = TRUE)
+  expect_no_match(html, ">All featured terms<", fixed = TRUE)
 })
 
 test_that("About data links render with supported list tags", {

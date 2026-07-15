@@ -12,31 +12,60 @@ de_column <- function(data, candidates, required = TRUE) {
   NULL
 }
 
-de_significance_levels <- function() {
-  c(
+de_significance_levels <- function(view = c("ma", "volcano")) {
+  view <- match.arg(view)
+  levels <- c(
     "Higher in Control",
     "Not significant",
-    "Higher with E-Stim",
-    "Adjusted P unavailable"
+    "Higher with E-Stim"
   )
+  if (identical(view, "volcano")) {
+    levels <- append(levels, "Adjusted P unavailable", after = 2L)
+  }
+  levels
 }
 
-de_significance_palette <- function() {
-  c(
+de_significance_palette <- function(view = c("ma", "volcano")) {
+  view <- match.arg(view)
+  palette <- c(
     "Higher in Control" = "#3569a8",
     "Not significant" = "#7f8b93",
-    "Higher with E-Stim" = "#b64b35",
-    "Adjusted P unavailable" = "#6b4f8f"
+    "Higher with E-Stim" = "#b64b35"
   )
+  if (identical(view, "volcano")) {
+    palette <- append(
+      palette,
+      c("Adjusted P unavailable" = "#8f5aa6"),
+      after = 2L
+    )
+  }
+  palette
 }
 
-de_significance_symbols <- function() {
-  c(
+de_significance_symbols <- function(view = c("ma", "volcano")) {
+  view <- match.arg(view)
+  symbols <- c(
     "Higher in Control" = "square",
     "Not significant" = "circle",
-    "Higher with E-Stim" = "triangle-up",
-    "Adjusted P unavailable" = "x"
+    "Higher with E-Stim" = "triangle-up"
   )
+  if (identical(view, "volcano")) {
+    symbols <- append(
+      symbols,
+      c("Adjusted P unavailable" = "x"),
+      after = 2L
+    )
+  }
+  symbols
+}
+
+de_plot_status <- function(data, view = c("ma", "volcano")) {
+  view <- match.arg(view)
+  status <- as.character(data$significance)
+  if (identical(view, "volcano")) {
+    status[is.na(data$probability)] <- "Adjusted P unavailable"
+  }
+  factor(status, levels = de_significance_levels(view))
 }
 
 prepare_de_plot_data <- function(primary_de, fdr_threshold = 0.05) {
@@ -77,7 +106,6 @@ prepare_de_plot_data <- function(primary_de, fdr_threshold = 0.05) {
   ))
 
   significance <- rep("Not significant", nrow(data))
-  significance[!probability_available] <- "Adjusted P unavailable"
   significance[
     probability_available &
       data$probability <= fdr_threshold &
@@ -102,6 +130,35 @@ prepare_de_plot_data <- function(primary_de, fdr_threshold = 0.05) {
       "significance"
     )
   ]
+}
+
+prepare_de_table_data <- function(primary_de) {
+  result_columns <- c(
+    "gene",
+    "baseMean",
+    "log2FoldChange",
+    "lfcSE",
+    "padj",
+    "mean_count_control",
+    "mean_count_estim"
+  )
+  if (!all(result_columns %in% names(primary_de))) {
+    stop(
+      "The differential-expression table is missing a displayed result column.",
+      call. = FALSE
+    )
+  }
+  displayed <- primary_de[result_columns]
+  names(displayed) <- c(
+    "Gene",
+    "Base Mean",
+    "log2FC",
+    "LFC SE",
+    "Adjusted P",
+    "Mean Count Control",
+    "Mean Count E-Stim"
+  )
+  displayed
 }
 
 format_de_value <- function(value, digits = 4L) {
@@ -134,7 +191,14 @@ de_direction <- function(log2_fold_change) {
   "No directional change"
 }
 
-de_hover_text <- function(data) {
+de_hover_text <- function(data, view = c("ma", "volcano")) {
+  view <- match.arg(view)
+  status <- data$plot_status %||% data$significance
+  status_label <- if (identical(view, "ma")) {
+    "MA category"
+  } else {
+    "FDR status"
+  }
   paste0(
     htmltools::htmlEscape(data$gene),
     "<br>baseMean: ",
@@ -143,8 +207,10 @@ de_hover_text <- function(data) {
     format_de_value(data$log2_fold_change),
     "<br>Adjusted P: ",
     format_de_probability(data$probability),
-    "<br>FDR status: ",
-    as.character(data$significance)
+    "<br>",
+    status_label,
+    ": ",
+    as.character(status)
   )
 }
 
@@ -170,17 +236,19 @@ make_de_plotly <- function(
   view <- match.arg(view)
   data <- prepare_de_plot_data(primary_de)
   data <- de_plot_coordinates(data, view)
-  data$hover <- de_hover_text(data)
+  data$plot_status <- de_plot_status(data, view)
+  data$hover <- de_hover_text(data, view)
   active <- casefold_key(data$gene) == casefold_key(active_gene)
   highlighted <- data[active, , drop = FALSE]
   background <- data[!active, , drop = FALSE]
-  palette <- de_significance_palette()
-  symbols <- de_significance_symbols()
+  levels <- de_significance_levels(view)
+  palette <- de_significance_palette(view)
+  symbols <- de_significance_symbols(view)
 
   plot <- plotly::plot_ly(source = source)
-  for (status in de_significance_levels()) {
+  for (status in levels) {
     trace_data <- background[
-      as.character(background$significance) == status,
+      as.character(background$plot_status) == status,
       ,
       drop = FALSE
     ]
@@ -196,7 +264,7 @@ make_de_plotly <- function(
       type = "scattergl",
       mode = "markers",
       marker = list(
-        size = if (identical(status, "Adjusted P unavailable")) 6.5 else 4.5,
+        size = 4.5,
         color = unname(palette[[status]]),
         symbol = unname(symbols[[status]]),
         opacity = if (identical(status, "Not significant")) 0.42 else 0.72,
@@ -209,7 +277,7 @@ make_de_plotly <- function(
     )
   }
   if (nrow(highlighted) > 0L) {
-    highlighted_status <- as.character(highlighted$significance[[1L]])
+    highlighted_status <- as.character(highlighted$plot_status[[1L]])
     plot <- plotly::add_trace(
       plot,
       data = highlighted,
@@ -292,6 +360,7 @@ make_de_plotly <- function(
       font = list(color = "#526b7b", size = 11)
     ))
   }
+  legend_title <- if (identical(view, "ma")) "MA category" else "FDR status"
   plot <- plotly::layout(
     plot,
     xaxis = xaxis,
@@ -299,7 +368,7 @@ make_de_plotly <- function(
     shapes = shapes,
     annotations = annotations,
     legend = list(
-      title = list(text = "FDR status"),
+      title = list(text = legend_title),
       orientation = "h",
       x = 0,
       y = -0.2,
@@ -327,21 +396,35 @@ make_de_ggplot <- function(
   view <- match.arg(view)
   data <- prepare_de_plot_data(primary_de)
   data <- de_plot_coordinates(data, view)
+  data$plot_status <- de_plot_status(data, view)
   data$active <- casefold_key(data$gene) == casefold_key(active_gene)
-  palette <- de_significance_palette()
+  palette <- de_significance_palette(view)
   shapes <- c(
     "Higher in Control" = 15,
     "Not significant" = 16,
-    "Higher with E-Stim" = 17,
-    "Adjusted P unavailable" = 4
+    "Higher with E-Stim" = 17
   )
+  if (identical(view, "volcano")) {
+    shapes <- append(
+      shapes,
+      c("Adjusted P unavailable" = 4),
+      after = 2L
+    )
+  }
+  caption <- "Positive fold changes indicate higher expression with E-Stim."
+  if (identical(view, "volcano")) {
+    caption <- paste(
+      caption,
+      "Crosses at zero have no adjusted P value and are not assigned an FDR result."
+    )
+  }
   plot <- ggplot2::ggplot(
     data,
     ggplot2::aes(
       x = plot_x,
       y = plot_y,
-      color = significance,
-      shape = significance
+      color = plot_status,
+      shape = plot_status
     )
   )
   if (identical(view, "ma")) {
@@ -399,21 +482,18 @@ make_de_ggplot <- function(
     ) +
     ggplot2::scale_color_manual(
       values = palette,
-      breaks = de_significance_levels(),
+      breaks = de_significance_levels(view),
       drop = FALSE
     ) +
     ggplot2::scale_shape_manual(
       values = shapes,
-      breaks = de_significance_levels(),
+      breaks = de_significance_levels(view),
       drop = FALSE
     ) +
     ggplot2::labs(
-      color = "FDR status",
-      shape = "FDR status",
-      caption = paste(
-        "Positive fold changes indicate higher expression with E-Stim.",
-        "Crosses mark genes whose adjusted P value is unavailable."
-      )
+      color = if (identical(view, "ma")) "MA category" else "FDR status",
+      shape = if (identical(view, "ma")) "MA category" else "FDR status",
+      caption = caption
     ) +
     ggplot2::theme_minimal(base_size = 11) +
     ggplot2::theme(
@@ -506,7 +586,8 @@ differential_expression_ui <- function(id) {
             "The MA plot puts effect size in the context of expression strength;",
             "the volcano plot emphasizes statistical evidence.",
             "Positive fold changes indicate higher expression with E-Stim.",
-            "Crosses mark genes whose adjusted P value is unavailable."
+            "Genes without an adjusted P value are part of Not significant",
+            "on the MA plot and appear as crosses at zero only on the volcano plot."
           ),
           id = ns("de_plot_help"),
           class = "supporting-copy de-plot-copy"
@@ -558,7 +639,7 @@ differential_expression_ui <- function(id) {
       ),
       bslib::card(
         class = "span-12",
-        bslib::card_header("Complete primary result"),
+        bslib::card_header("Pseudobulk DE results"),
         DT::DTOutput(ns("de_table"))
       )
     )
@@ -612,8 +693,8 @@ differential_expression_server <- function(
 
     output$de_table <- DT::renderDT(
       {
-        DT::datatable(
-          bundle$primary_de,
+        table <- DT::datatable(
+          prepare_de_table_data(bundle$primary_de),
           rownames = FALSE,
           filter = "top",
           selection = "single",
@@ -629,6 +710,17 @@ differential_expression_server <- function(
             search = list(caseInsensitive = TRUE)
           )
         )
+        table <- DT::formatRound(
+          table,
+          columns = c("Base Mean", "Mean Count Control", "Mean Count E-Stim"),
+          digits = 2L
+        )
+        table <- DT::formatRound(
+          table,
+          columns = c("log2FC", "LFC SE"),
+          digits = 3L
+        )
+        DT::formatSignif(table, columns = "Adjusted P", digits = 3L)
       },
       server = TRUE
     )

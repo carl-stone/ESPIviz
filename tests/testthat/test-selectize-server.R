@@ -27,7 +27,12 @@ test_that("programmatic gene changes keep server selectize data valid", {
     function(object) endsWith(object$name, "active_gene"),
     registered
   )
+  secondary_gene_objects <- Filter(
+    function(object) endsWith(object$name, "secondary_gene"),
+    registered
+  )
   expect_gt(length(gene_objects), 0L)
+  expect_gt(length(secondary_gene_objects), 0L)
 
   request <- list(
     QUERY_STRING = paste0(
@@ -35,7 +40,8 @@ test_that("programmatic gene changes keep server selectize data valid", {
       "&conju=and&maxop=1000"
     )
   )
-  for (object in gene_objects) {
+  for (object in c(gene_objects, secondary_gene_objects)) {
+    expect_false(is.null(object$data))
     expect_true(all(c("label", "value") %in% names(object$data)))
     expect_silent(object$filter(object$data, request))
   }

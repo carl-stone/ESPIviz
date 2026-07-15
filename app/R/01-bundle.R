@@ -234,13 +234,38 @@ validate_bundle <- function(bundle, expected = NULL) {
       call. = FALSE
     )
   }
+  if (
+    any(!is.finite(bundle$counts@x)) ||
+      any(bundle$counts@x < 0) ||
+      any(abs(bundle$counts@x - round(bundle$counts@x)) > 1e-8)
+  ) {
+    stop(
+      "The sparse count matrix must contain finite, non-negative raw counts.",
+      call. = FALSE
+    )
+  }
+  if (
+    !isTRUE(all.equal(
+      as.numeric(Matrix::rowSums(bundle$counts)),
+      bundle$cells$library_size,
+      tolerance = 0
+    ))
+  ) {
+    stop(
+      "Cell library sizes must equal sparse raw-count row sums.",
+      call. = FALSE
+    )
+  }
 
   de_columns <- c(
     "gene",
     "baseMean",
     "log2FoldChange",
+    "lfcSE",
     "pvalue",
     "padj",
+    "mean_count_control",
+    "mean_count_estim",
     "design"
   )
   allowed_de_columns <- c(
@@ -268,6 +293,39 @@ validate_bundle <- function(bundle, expected = NULL) {
       anyNA(bundle$primary_de$baseMean) ||
       any(!is.finite(bundle$primary_de$baseMean)) ||
       any(bundle$primary_de$baseMean < 0) ||
+      !is.numeric(bundle$primary_de$log2FoldChange) ||
+      anyNA(bundle$primary_de$log2FoldChange) ||
+      any(!is.finite(bundle$primary_de$log2FoldChange)) ||
+      !is.numeric(bundle$primary_de$lfcSE) ||
+      anyNA(bundle$primary_de$lfcSE) ||
+      any(!is.finite(bundle$primary_de$lfcSE)) ||
+      any(bundle$primary_de$lfcSE < 0) ||
+      !is.numeric(bundle$primary_de$pvalue) ||
+      any(
+        !is.na(bundle$primary_de$pvalue) &
+          (
+            !is.finite(bundle$primary_de$pvalue) |
+              bundle$primary_de$pvalue < 0 |
+              bundle$primary_de$pvalue > 1
+          )
+      ) ||
+      !is.numeric(bundle$primary_de$padj) ||
+      any(
+        !is.na(bundle$primary_de$padj) &
+          (
+            !is.finite(bundle$primary_de$padj) |
+              bundle$primary_de$padj < 0 |
+              bundle$primary_de$padj > 1
+          )
+      ) ||
+      !is.numeric(bundle$primary_de$mean_count_control) ||
+      anyNA(bundle$primary_de$mean_count_control) ||
+      any(!is.finite(bundle$primary_de$mean_count_control)) ||
+      any(bundle$primary_de$mean_count_control < 0) ||
+      !is.numeric(bundle$primary_de$mean_count_estim) ||
+      anyNA(bundle$primary_de$mean_count_estim) ||
+      any(!is.finite(bundle$primary_de$mean_count_estim)) ||
+      any(bundle$primary_de$mean_count_estim < 0) ||
       !identical(
         unique(as.character(bundle$primary_de$design)),
         "primary_unpaired_condition"

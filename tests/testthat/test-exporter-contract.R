@@ -187,11 +187,63 @@ test_that("public-bundle validator rejects alternate DE surfaces and schemas", {
     ignore.case = TRUE
   )
 
+  for (column in c("lfcSE", "mean_count_control", "mean_count_estim")) {
+    missing_display_column <- bundle
+    missing_display_column$primary_de[[column]] <- NULL
+    expect_error(
+      validate_public_bundle(missing_display_column, enforce_frozen = FALSE),
+      "missing required columns",
+      ignore.case = TRUE,
+      info = paste("Missing required DE display column:", column)
+    )
+  }
+
   invalid_base_mean <- bundle
   invalid_base_mean$primary_de$baseMean[[1L]] <- -1
   expect_error(
     validate_public_bundle(invalid_base_mean, enforce_frozen = FALSE),
     "baseMean",
+    fixed = TRUE
+  )
+
+  invalid_log2fc <- bundle
+  invalid_log2fc$primary_de$log2FoldChange[[1L]] <- Inf
+  expect_error(
+    validate_public_bundle(invalid_log2fc, enforce_frozen = FALSE),
+    "log2FoldChange",
+    fixed = TRUE
+  )
+
+  invalid_lfcse <- bundle
+  invalid_lfcse$primary_de$lfcSE <-
+    as.character(invalid_lfcse$primary_de$lfcSE)
+  expect_error(
+    validate_public_bundle(invalid_lfcse, enforce_frozen = FALSE),
+    "lfcSE",
+    fixed = TRUE
+  )
+
+  invalid_padj <- bundle
+  invalid_padj$primary_de$padj[[1L]] <- -1
+  expect_error(
+    validate_public_bundle(invalid_padj, enforce_frozen = FALSE),
+    "padj",
+    fixed = TRUE
+  )
+
+  invalid_pvalue <- bundle
+  invalid_pvalue$primary_de$pvalue[[1L]] <- 2
+  expect_error(
+    validate_public_bundle(invalid_pvalue, enforce_frozen = FALSE),
+    "pvalue",
+    fixed = TRUE
+  )
+
+  invalid_mean_count <- bundle
+  invalid_mean_count$primary_de$mean_count_control[[1L]] <- -1
+  expect_error(
+    validate_public_bundle(invalid_mean_count, enforce_frozen = FALSE),
+    "mean_count_control",
     fixed = TRUE
   )
 })
