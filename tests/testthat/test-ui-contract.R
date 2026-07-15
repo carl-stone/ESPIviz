@@ -53,6 +53,7 @@ test_that("Explore limits UMAP colors and exposes every selection mode", {
   ))$html
 
   expect_match(html, "Log normalized expression", fixed = TRUE)
+  expect_match(html, ">Detection<", fixed = TRUE)
   expect_match(html, ">Cluster<", fixed = TRUE)
   expect_match(html, ">Condition<", fixed = TRUE)
   expect_match(html, "Clear selection", fixed = TRUE)
