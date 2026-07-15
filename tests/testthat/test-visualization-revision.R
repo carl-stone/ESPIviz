@@ -439,9 +439,45 @@ test_that("pathway plots keep GSEA and ORA on method-specific axes", {
 
   duplicate_label <- pathways
   duplicate_label$label[[2L]] <- duplicate_label$label[[1L]]
-  expect_error(
-    prepare_pathway_plot_data(duplicate_label),
-    "labels must be unique",
-    fixed = TRUE
-  )
+  duplicate_label$source[[2L]] <- duplicate_label$source[[1L]]
+  observed_duplicate_label <- prepare_pathway_plot_data(duplicate_label)
+  expect_identical(anyDuplicated(observed_duplicate_label$plot_label), 0L)
+  expect_true(all(mapply(
+    grepl,
+    pattern = as.character(observed_duplicate_label$direction),
+    x = observed_duplicate_label$plot_label,
+    MoreArgs = list(fixed = TRUE)
+  )))
+})
+
+test_that("pathway plots use the top ten results per method and direction", {
+  pathways <- do.call(rbind, lapply(c("GSEA", "ORA"), function(source) {
+    do.call(rbind, lapply(c("Control", "E-Stim"), function(direction) {
+      index <- seq_len(15L)
+      data.frame(
+        pathway_id = paste(tolower(source), direction, index, sep = "_"),
+        label = paste(source, direction, index),
+        source = source,
+        direction = direction,
+        description = paste(source, direction, index),
+        p_value = index / 100,
+        p_adjust = index / 20,
+        score = if (identical(source, "GSEA")) {
+          if (identical(direction, "E-Stim")) index else -index
+        } else {
+          index + 1
+        },
+        gene_count = index,
+        stringsAsFactors = FALSE
+      )
+    }))
+  }))
+
+  observed <- top_pathway_results(pathways)
+  groups <- interaction(observed$source, observed$direction, drop = TRUE)
+
+  expect_equal(nrow(observed), 40L)
+  expect_true(all(table(groups) == 10L))
+  expect_true(all(observed$p_adjust <= 0.5))
+  expect_true(any(observed$p_adjust >= 0.05))
 })

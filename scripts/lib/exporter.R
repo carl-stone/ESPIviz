@@ -18,7 +18,7 @@ espiviz_require <- function(package) {
 espiviz_contract <- function() {
   list(
     schema_version = "1.0.0",
-    data_version = "1.0.0",
+    data_version = "1.1.0",
     reduction = "umap_pflog_mg_selected_no_filter_cc_dims20",
     cluster_column = "cluster_pflog_mg_selected_no_filter_cc_dims20_res0.5",
     genes = 38394L,
@@ -58,10 +58,12 @@ espiviz_read_source_manifest <- function(path) {
     "ora_up",
     "ora_down",
     "gsea",
-    "featured_genes_config",
-    "featured_pathways_config"
+    "featured_genes_config"
   )
-  allowed <- c("manifest_version", required)
+  # Older local manifests may retain this now-unused key. Accept it so existing
+  # private setup continues to work, but do not validate or record it as an
+  # input to the complete enrichment-result bundle.
+  allowed <- c("manifest_version", required, "featured_pathways_config")
 
   missing <- setdiff(required, names(manifest))
   if (length(missing) > 0L) {
@@ -126,8 +128,7 @@ espiviz_input_provenance <- function(manifest) {
     "ora_up",
     "ora_down",
     "gsea",
-    "featured_genes_config",
-    "featured_pathways_config"
+    "featured_genes_config"
   )
   stats::setNames(
     lapply(input_names, function(name) {
@@ -555,36 +556,20 @@ espiviz_map_entrez_symbols <- function(entrez_ids) {
   unname(mapped[match(entrez_ids, names(mapped))])
 }
 
-espiviz_read_featured_pathways <- function(
-  config_path,
+espiviz_pathway_id <- function(source, result_id) {
+  normalized_id <- gsub("[^a-z0-9]+", "_", tolower(result_id))
+  normalized_id <- gsub("^_+|_+$", "", normalized_id)
+  paste(source, normalized_id, sep = "_")
+}
+
+espiviz_read_pathway_results <- function(
   result_paths,
-  genes
+  genes,
+  map_entrez = espiviz_map_entrez_symbols
 ) {
-  config <- espiviz_read_table(config_path, "csv")
-  required <- c(
-    "pathway_id",
-    "label",
-    "source",
-    "result_id",
-    "direction",
-    "display_order"
-  )
-  espiviz_require_columns(config, required, "Featured pathway config")
-  if (nrow(config) == 0L) {
-    espiviz_abort("Featured pathway config must contain at least one term.")
-  }
-  if (anyDuplicated(config$pathway_id) || anyDuplicated(config$label)) {
-    espiviz_abort("Featured pathway IDs and labels must be unique.")
-  }
-  if (any(!grepl("^[a-z0-9_]+$", config$pathway_id))) {
-    espiviz_abort("Featured pathway_id values must use lower snake case.")
-  }
-  allowed_sources <- c("ora_up", "ora_down", "gsea")
-  if (any(!config$source %in% allowed_sources)) {
-    espiviz_abort("Featured pathway source must be ora_up, ora_down, or gsea.")
-  }
-  if (any(!config$direction %in% c("E-Stim", "Control"))) {
-    espiviz_abort("Featured pathway direction must be E-Stim or Control.")
+  allowed_sources <- c("gsea", "ora_up", "ora_down")
+  if (!all(allowed_sources %in% names(result_paths))) {
+    espiviz_abort("GSEA, up-ORA, and down-ORA result paths are required.")
   }
 
   result_tables <- lapply(allowed_sources, function(source) {
@@ -593,7 +578,7 @@ espiviz_read_featured_pathways <- function(
     extra <- if (identical(source, "gsea")) {
       c("NES", "setSize", "core_enrichment")
     } else {
-      c("FoldEnrichment", "Count", "geneID", "direction")
+      c("FoldEnrichment", "Count", "geneID")
     }
     espiviz_require_columns(
       data,
@@ -603,97 +588,127 @@ espiviz_read_featured_pathways <- function(
     if (anyDuplicated(data$ID)) {
       espiviz_abort("%s pathway table contains duplicate term IDs.", source)
     }
+    if (
+      nrow(data) == 0L ||
+        anyNA(data$ID) ||
+        any(!grepl("^GO:[0-9]+$", as.character(data$ID))) ||
+        anyNA(data$Description) ||
+        any(!nzchar(as.character(data$Description)))
+    ) {
+      espiviz_abort(
+        "%s pathway table must contain Gene Ontology term IDs and labels.",
+        source
+      )
+    }
+    probabilities <- data[c("pvalue", "p.adjust")]
+    if (
+      any(!vapply(probabilities, is.numeric, logical(1L))) ||
+        anyNA(probabilities) ||
+        any(!is.finite(as.matrix(probabilities))) ||
+        any(as.matrix(probabilities) < 0 | as.matrix(probabilities) > 1)
+    ) {
+      espiviz_abort("%s pathway probabilities are invalid.", source)
+    }
     data
   })
   names(result_tables) <- allowed_sources
 
-  config <- config[order(as.numeric(config$display_order)), , drop = FALSE]
-  pathway_rows <- vector("list", nrow(config))
-  pathway_gene_rows <- vector("list", nrow(config))
-
-  for (index in seq_len(nrow(config))) {
-    item <- config[index, , drop = FALSE]
-    source <- item$source[[1L]]
+  pathway_rows <- list()
+  pathway_gene_rows <- list()
+  output_index <- 0L
+  for (source in allowed_sources) {
     source_table <- result_tables[[source]]
-    source_row <- source_table[
-      source_table$ID == item$result_id[[1L]],
-      ,
-      drop = FALSE
-    ]
-    if (nrow(source_row) != 1L) {
-      espiviz_abort(
-        "Configured pathway '%s' was not found exactly once in %s.",
-        item$result_id[[1L]],
-        source
-      )
-    }
-    if (is.na(source_row$p.adjust[[1L]]) || source_row$p.adjust[[1L]] >= 0.05) {
-      espiviz_abort(
-        "Configured pathway '%s' is not significant at adjusted P < 0.05.",
-        item$result_id[[1L]]
-      )
-    }
-
     if (identical(source, "gsea")) {
-      score <- as.numeric(source_row$NES[[1L]])
-      expected_direction <- if (score > 0) "E-Stim" else "Control"
-      entrez <- strsplit(source_row$core_enrichment[[1L]], "/", fixed = TRUE)[[
-        1L
-      ]]
-      pathway_genes <- espiviz_map_entrez_symbols(entrez)
-      gene_count <- as.integer(source_row$setSize[[1L]])
+      score <- as.numeric(source_table$NES)
+      direction <- ifelse(score > 0, "E-Stim", "Control")
+      gene_lists <- strsplit(
+        as.character(source_table$core_enrichment),
+        "/",
+        fixed = TRUE
+      )
+      all_entrez <- unique(unlist(gene_lists, use.names = FALSE))
+      mapped_genes <- map_entrez(all_entrez)
+      if (length(mapped_genes) != length(all_entrez)) {
+        espiviz_abort("The GSEA Entrez-to-symbol mapping is invalid.")
+      }
+      names(mapped_genes) <- all_entrez
+      gene_lists <- lapply(gene_lists, function(entrez) {
+        unname(mapped_genes[entrez])
+      })
+      gene_count <- as.integer(source_table$setSize)
       analysis <- "GSEA"
     } else {
-      score <- as.numeric(source_row$FoldEnrichment[[1L]])
-      expected_direction <- if (identical(source, "ora_up")) {
+      score <- as.numeric(source_table$FoldEnrichment)
+      direction <- if (identical(source, "ora_up")) {
         "E-Stim"
       } else {
         "Control"
       }
-      pathway_genes <- strsplit(source_row$geneID[[1L]], "/", fixed = TRUE)[[
-        1L
-      ]]
-      gene_count <- as.integer(source_row$Count[[1L]])
+      direction <- rep(direction, nrow(source_table))
+      gene_lists <- strsplit(
+        as.character(source_table$geneID),
+        "/",
+        fixed = TRUE
+      )
+      gene_count <- as.integer(source_table$Count)
       analysis <- "ORA"
     }
-    if (!identical(item$direction[[1L]], expected_direction)) {
-      espiviz_abort(
-        "Configured direction for pathway '%s' does not match its result.",
-        item$result_id[[1L]]
-      )
-    }
-    pathway_genes <- unique(pathway_genes[!is.na(pathway_genes)])
-    pathway_genes <- pathway_genes[pathway_genes %in% genes]
-    if (length(pathway_genes) == 0L) {
-      espiviz_abort(
-        "Configured pathway '%s' has no genes in the source object.",
-        item$result_id[[1L]]
-      )
+    if (
+      anyNA(score) ||
+        any(!is.finite(score)) ||
+        anyNA(gene_count) ||
+        any(!is.finite(gene_count)) ||
+        any(gene_count < 0)
+    ) {
+      espiviz_abort("%s pathway scores or gene counts are invalid.", source)
     }
 
-    pathway_rows[[index]] <- data.frame(
-      pathway_id = item$pathway_id[[1L]],
-      label = item$label[[1L]],
+    source_ids <- vapply(
+      as.character(source_table$ID),
+      function(result_id) espiviz_pathway_id(source, result_id),
+      character(1L)
+    )
+    pathway_rows[[source]] <- data.frame(
+      pathway_id = unname(source_ids),
+      label = as.character(source_table$Description),
       source = analysis,
-      direction = item$direction[[1L]],
-      description = source_row$Description[[1L]],
-      p_value = as.numeric(source_row$pvalue[[1L]]),
-      p_adjust = as.numeric(source_row$p.adjust[[1L]]),
+      direction = direction,
+      description = as.character(source_table$Description),
+      p_value = as.numeric(source_table$pvalue),
+      p_adjust = as.numeric(source_table$p.adjust),
       score = score,
       gene_count = gene_count,
       stringsAsFactors = FALSE,
       check.names = FALSE
     )
-    pathway_gene_rows[[index]] <- data.frame(
-      pathway_id = item$pathway_id[[1L]],
-      gene = pathway_genes,
-      stringsAsFactors = FALSE
-    )
+
+    for (index in seq_len(nrow(source_table))) {
+      pathway_genes <- unique(gene_lists[[index]])
+      pathway_genes <- pathway_genes[
+        !is.na(pathway_genes) & pathway_genes %in% genes
+      ]
+      if (length(pathway_genes) == 0L) next
+      output_index <- output_index + 1L
+      pathway_gene_rows[[output_index]] <- data.frame(
+        pathway_id = unname(source_ids[[index]]),
+        gene = pathway_genes,
+        stringsAsFactors = FALSE
+      )
+    }
   }
 
+  pathways <- do.call(rbind, pathway_rows)
+  rownames(pathways) <- NULL
+  pathway_genes <- if (length(pathway_gene_rows) > 0L) {
+    do.call(rbind, pathway_gene_rows)
+  } else {
+    data.frame(pathway_id = character(), gene = character())
+  }
+  rownames(pathway_genes) <- NULL
+
   list(
-    pathways = do.call(rbind, pathway_rows),
-    pathway_genes = do.call(rbind, pathway_gene_rows)
+    pathways = pathways,
+    pathway_genes = pathway_genes
   )
 }
 
@@ -989,11 +1004,10 @@ espiviz_validate_public_bundle <- function(
       any(!nzchar(as.character(bundle$pathways$pathway_id))) ||
       anyDuplicated(as.character(bundle$pathways$pathway_id)) ||
       anyNA(bundle$pathways$label) ||
-      any(!nzchar(as.character(bundle$pathways$label))) ||
-      anyDuplicated(as.character(bundle$pathways$label))
+      any(!nzchar(as.character(bundle$pathways$label)))
   ) {
     espiviz_abort(
-      "Bundle pathways must contain complete, unique IDs and labels."
+      "Bundle pathways must contain complete, unique IDs and complete labels."
     )
   }
   if (
@@ -1125,8 +1139,7 @@ espiviz_build_bundle <- function(manifest_path, contract = espiviz_contract()) {
     manifest$featured_genes_config$path,
     genes = source$genes$gene
   )
-  featured_pathways <- espiviz_read_featured_pathways(
-    config_path = manifest$featured_pathways_config$path,
+  pathway_results <- espiviz_read_pathway_results(
     result_paths = lapply(
       manifest[c("ora_up", "ora_down", "gsea")],
       function(item) item$path
@@ -1167,8 +1180,8 @@ espiviz_build_bundle <- function(manifest_path, contract = espiviz_contract()) {
     counts = source$counts,
     primary_de = primary_de,
     markers = markers,
-    pathways = featured_pathways$pathways,
-    pathway_genes = featured_pathways$pathway_genes,
+    pathways = pathway_results$pathways,
+    pathway_genes = pathway_results$pathway_genes,
     featured_gene_sets = featured_gene_sets
   )
   espiviz_validate_public_bundle(

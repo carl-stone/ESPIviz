@@ -6,8 +6,7 @@ make_source_manifest <- function(source_sha256) {
     "ora_up",
     "ora_down",
     "gsea",
-    "featured_genes_config",
-    "featured_pathways_config"
+    "featured_genes_config"
   )
   directory <- tempfile("espiviz-source-")
   dir.create(directory)
@@ -80,6 +79,7 @@ test_that("exporter pins the frozen structural source contract", {
   expect_identical(contract$clusters, as.character(1:8))
   expect_identical(contract$primary_de_rows, 24601L)
   expect_identical(contract$primary_de_design, "primary_unpaired_condition")
+  expect_identical(contract$data_version, "1.1.0")
 })
 
 test_that("source-manifest example requires one complete source hash", {
@@ -89,6 +89,100 @@ test_that("source-manifest example requires one complete source hash", {
   )
 
   expect_match(manifest$source_object$sha256, "^[0-9a-f]{64}$")
+  expect_setequal(
+    names(manifest),
+    c(
+      "manifest_version",
+      "source_object",
+      "primary_de",
+      "markers",
+      "ora_up",
+      "ora_down",
+      "gsea",
+      "featured_genes_config"
+    )
+  )
+})
+
+test_that("exporter includes every GSEA and ORA enrichment result", {
+  directory <- tempfile("espiviz-pathways-")
+  dir.create(directory)
+  paths <- stats::setNames(
+    file.path(directory, paste0(c("ora_up", "ora_down", "gsea"), ".tsv")),
+    c("ora_up", "ora_down", "gsea")
+  )
+  gsea <- data.frame(
+    ID = c("GO:0001", "GO:0002"),
+    Description = c("Shared term", "Down term"),
+    pvalue = c(0.01, 0.4),
+    p.adjust = c(0.02, 0.8),
+    NES = c(2, -1.5),
+    setSize = c(20L, 30L),
+    core_enrichment = c("1/2", "3"),
+    check.names = FALSE
+  )
+  ora_up <- data.frame(
+    ID = "GO:0001",
+    Description = "Shared term",
+    pvalue = 0.3,
+    p.adjust = 0.6,
+    FoldEnrichment = 3,
+    Count = 2L,
+    geneID = "Glul/Other",
+    direction = "E-Stim",
+    check.names = FALSE
+  )
+  ora_down <- data.frame(
+    ID = "GO:0003",
+    Description = "Control term",
+    pvalue = 0.04,
+    p.adjust = 0.08,
+    FoldEnrichment = 2,
+    Count = 1L,
+    geneID = "Mcm2",
+    direction = "Control",
+    check.names = FALSE
+  )
+  utils::write.table(
+    gsea,
+    paths[["gsea"]],
+    sep = "\t",
+    row.names = FALSE,
+    quote = FALSE
+  )
+  utils::write.table(
+    ora_up,
+    paths[["ora_up"]],
+    sep = "\t",
+    row.names = FALSE,
+    quote = FALSE
+  )
+  utils::write.table(
+    ora_down,
+    paths[["ora_down"]],
+    sep = "\t",
+    row.names = FALSE,
+    quote = FALSE
+  )
+
+  observed <- espiviz_read_pathway_results(
+    result_paths = paths,
+    genes = c("Glul", "Other", "Mcm2"),
+    map_entrez = function(ids) {
+      unname(c("1" = "Glul", "2" = "Other", "3" = "Mcm2")[ids])
+    }
+  )
+
+  expect_equal(nrow(observed$pathways), 4L)
+  expect_identical(anyDuplicated(observed$pathways$pathway_id), 0L)
+  expect_gt(anyDuplicated(observed$pathways$label), 0L)
+  expect_setequal(observed$pathways$p_adjust, c(0.02, 0.8, 0.6, 0.08))
+  expect_true(any(observed$pathways$p_adjust > 0.05))
+  expect_setequal(
+    observed$pathways$direction,
+    c("E-Stim", "Control")
+  )
+  expect_setequal(observed$pathway_genes$gene, c("Glul", "Other", "Mcm2"))
 })
 
 test_that("exporter rejects source content that does not match its declared hash", {
@@ -248,7 +342,7 @@ test_that("public-bundle validator rejects alternate DE surfaces and schemas", {
   )
 })
 
-test_that("public-bundle validator requires usable featured pathways", {
+test_that("public-bundle validator requires usable enrichment results", {
   bundle <- synthetic_bundle()
 
   empty_pathways <- bundle
@@ -256,7 +350,7 @@ test_that("public-bundle validator requires usable featured pathways", {
   empty_pathways$pathway_genes <- empty_pathways$pathway_genes[0, , drop = FALSE]
   expect_error(
     validate_public_bundle(empty_pathways, enforce_frozen = FALSE),
-    "unique IDs and labels",
+    "unique IDs",
     fixed = TRUE
   )
 
@@ -265,17 +359,15 @@ test_that("public-bundle validator requires usable featured pathways", {
     duplicate_ids$pathways$pathway_id[[1L]]
   expect_error(
     validate_public_bundle(duplicate_ids, enforce_frozen = FALSE),
-    "unique IDs and labels",
+    "unique IDs",
     fixed = TRUE
   )
 
   duplicate_labels <- bundle
   duplicate_labels$pathways$label[[2L]] <-
     duplicate_labels$pathways$label[[1L]]
-  expect_error(
-    validate_public_bundle(duplicate_labels, enforce_frozen = FALSE),
-    "unique IDs and labels",
-    fixed = TRUE
+  expect_silent(
+    validate_public_bundle(duplicate_labels, enforce_frozen = FALSE)
   )
 
   invalid_method <- bundle
