@@ -52,7 +52,7 @@ espiviz_cli_help <- function() {
       "    [--public-manifest PATH --asset-url HTTPS_URL]\n\n",
       "Options:\n",
       "  --manifest PATH         Gitignored local source manifest.\n",
-      "  --output PATH           Output espiviz-data-v1.1.0.rds path.\n",
+      "  --output PATH           Output espiviz-data-v1.2.0.rds path.\n",
       "  --dry-run               Validate and build in memory without writing.\n",
       "  --overwrite             Replace existing output files.\n",
       "  --public-manifest PATH  Write the small deploy-time JSON manifest.\n",
@@ -142,7 +142,7 @@ espiviz_run_cli <- function(arguments = commandArgs(trailingOnly = TRUE)) {
     sprintf(
       paste0(
         "Validated %s genes, %s cells, %s clusters, %s primary DE rows, ",
-        "and %s featured pathways."
+        "and %s enrichment results."
       ),
       format(nrow(bundle$genes), big.mark = ","),
       format(nrow(bundle$cells), big.mark = ","),

@@ -1,3 +1,108 @@
+test_that("summary violin data preserves expression and selection grouping", {
+  expect_app_helper("prepare_summary_violin_data")
+  expect_app_helper("summary_violin_plot_data")
+  bundle <- synthetic_bundle()
+  selected <- c("cell_1", "cell_3")
+  data <- prepare_summary_violin_data(
+    bundle,
+    c("Glul", "EGFP"),
+    selected
+  )
+
+  expect_equal(nrow(data), 2L * nrow(bundle$cells))
+  expect_equal(sum(data$selected), 2L * length(selected))
+  observed <- data[
+    data$cell_id == "cell_3" & as.character(data$gene) == "Glul",
+    "expression"
+  ]
+  expected <- expression_matrix(bundle, "Glul", "cell_3")[1L, 1L]
+  expect_equal(observed, expected)
+
+  comparison <- summary_violin_plot_data(data, "comparison")
+  expect_setequal(
+    unique(as.character(comparison$group)),
+    c("Selected cells", "Remaining cells")
+  )
+  expect_equal(nrow(comparison), nrow(data))
+
+  by_sample <- summary_violin_plot_data(data, "sample")
+  expect_equal(nrow(by_sample), 2L * length(selected))
+  expect_true(all(by_sample$selected))
+  expect_setequal(
+    as.character(by_sample$cell_id),
+    rep(selected, times = 2L)
+  )
+
+  all_cells <- prepare_summary_violin_data(bundle, "Glul")
+  all_comparison <- summary_violin_plot_data(all_cells, "comparison")
+  expect_identical(unique(as.character(all_comparison$group)), "All cells")
+  expect_identical(levels(all_comparison$group), "All cells")
+  expect_equal(
+    nrow(summary_violin_plot_data(all_cells, "condition")),
+    nrow(bundle$cells)
+  )
+})
+
+test_that("summary violin plots build for all four expression groupings", {
+  expect_app_helper("make_summary_violin_plot")
+  bundle <- synthetic_bundle()
+  data <- prepare_summary_violin_data(
+    bundle,
+    c("Glul", "EGFP")
+  )
+  settings <- list(
+    comparison = list(label = NULL, rotate_x = FALSE),
+    sample = list(label = "Biological sample", rotate_x = TRUE),
+    condition = list(label = "Condition", rotate_x = FALSE),
+    cluster = list(label = "Final cluster", rotate_x = FALSE)
+  )
+
+  for (group_by in names(settings)) {
+    setting <- settings[[group_by]]
+    plot <- make_summary_violin_plot(
+      data,
+      group_by = group_by,
+      group_label = setting$label,
+      rotate_x = setting$rotate_x
+    )
+
+    expect_s3_class(plot, "ggplot")
+    expect_true(any(vapply(
+      plot$layers,
+      function(layer) inherits(layer$geom, "GeomViolin"),
+      logical(1L)
+    )))
+    expect_identical(plot$labels$y, "Log normalized expression")
+    expect_silent(ggplot2::ggplot_build(plot))
+  }
+})
+
+test_that("summary violins reuse configured condition and cluster colors", {
+  expect_app_helper("make_summary_violin_plot")
+  bundle <- synthetic_bundle()
+  bundle$palette$cluster <- stats::setNames(
+    c("#A11D1D", "#1D6FA1", "#268A45"),
+    c("0", "1", "2")
+  )
+  data <- prepare_summary_violin_data(bundle, "Glul")
+
+  for (group_by in c("condition", "cluster")) {
+    plot <- make_summary_violin_plot(
+      data,
+      bundle = bundle,
+      group_by = group_by,
+      group_label = group_by
+    )
+    groups <- levels(summary_violin_plot_data(data, group_by)$group)
+    fill_scale <- plot$scales$get_scales("fill")
+
+    expect_equal(
+      unname(fill_scale$palette(length(groups))),
+      unname(discrete_palette(bundle, group_by, groups))
+    )
+  }
+})
+
 test_that("comparison dot-plot data exposes expression and detection by group", {
   expect_app_helper("comparison_plot_data")
   bundle <- synthetic_bundle()
@@ -139,9 +244,10 @@ test_that("interactive PFlog UMAP uses a zero-centered colorbar", {
   )
   expect_length(color_traces, 1L)
   expect_identical(
-    color_traces[[1L]]$marker$colorbar$title,
+    color_traces[[1L]]$marker$colorbar$title$text,
     "Glul log normalized expression"
   )
+  expect_identical(color_traces[[1L]]$marker$colorbar$title$side, "right")
   expect_equal(color_traces[[1L]]$marker$cmin, -limit, tolerance = 1e-12)
   expect_equal(color_traces[[1L]]$marker$cmax, limit, tolerance = 1e-12)
   expect_equal(
@@ -200,6 +306,22 @@ test_that("gene-expression UMAP draws high-expressing cells last", {
 
   clusters <- umap_plot_data(bundle, "cluster", "Glul")
   expect_identical(clusters$cell_id, bundle$cells$cell_id)
+})
+
+test_that("single-gene detection UMAP uses raw counts", {
+  bundle <- synthetic_bundle()
+  plotted <- umap_plot_data(bundle, "detection", "Glul")
+  observed <- stats::setNames(as.character(plotted$color_value), plotted$cell_id)
+  expected <- ifelse(bundle$counts[, "Glul"] > 0, "Detected", "Not detected")
+
+  expect_identical(
+    unname(observed[bundle$cells$cell_id]),
+    unname(expected)
+  )
+  expect_identical(
+    unique(plotted$color_label),
+    "Glul raw-count detection"
+  )
 })
 
 test_that("cluster labels use one on-data position per cluster", {
@@ -268,7 +390,7 @@ test_that("cluster UMAP labels appear interactively and in downloads", {
 test_that("interactive UMAP traces preserve every cell key and selected key", {
   bundle <- synthetic_bundle()
 
-  for (color_by in c("expression", "condition", "cluster")) {
+  for (color_by in c("expression", "detection", "condition", "cluster")) {
     built <- plotly::plotly_build(make_umap_plotly(
       bundle,
       color_by = color_by,

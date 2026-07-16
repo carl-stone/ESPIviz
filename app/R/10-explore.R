@@ -6,6 +6,20 @@ explore_ui <- function(id, bundle) {
     "All cells" = "all",
     stats::setNames(cluster_choices, paste("Cluster", cluster_choices))
   )
+  summary_plot_type_input <- function(id) {
+    shiny::selectInput(
+      ns(id),
+      "Plot type",
+      choices = c("Violin plot" = "violin", "Dot plot" = "dot"),
+      selected = "violin",
+      width = "180px"
+    )
+  }
+  summary_plot_copy <- paste(
+    "Violin plots show cell-level log normalized expression distributions.",
+    "Choose Dot plot. Mean log normalized expression is shown by color and",
+    "detected-cell percentages by dot size."
+  )
 
   bslib::layout_sidebar(
     fillable = FALSE,
@@ -43,6 +57,7 @@ explore_ui <- function(id, bundle) {
         "Color UMAP by",
         choices = c(
           "Log normalized expression" = "expression",
+          "Detection" = "detection",
           "Cluster" = "cluster",
           "Condition" = "condition"
         )
@@ -235,7 +250,15 @@ explore_ui <- function(id, bundle) {
           selected = "By cluster",
           bslib::nav_panel(
             "Comparison",
-            shiny::uiOutput(ns("comparison_heading")),
+            htmltools::div(
+              class = "result-toolbar",
+              shiny::uiOutput(ns("comparison_heading")),
+              summary_plot_type_input("comparison_plot_type")
+            ),
+            htmltools::p(
+              summary_plot_copy,
+              class = "supporting-copy"
+            ),
             htmltools::div(
               class = "comparison-plot-shell",
               shiny::uiOutput(ns("gene_comparison_plot_ui"))
@@ -325,15 +348,19 @@ explore_ui <- function(id, bundle) {
           ),
           bslib::nav_panel(
             "By sample",
-            htmltools::h3(
-              "Expression by biological sample",
-              class = "result-title"
+            htmltools::div(
+              class = "result-toolbar",
+              htmltools::h3(
+                "Expression by biological sample",
+                class = "result-title"
+              ),
+              summary_plot_type_input("sample_plot_type")
             ),
             htmltools::p(
               paste(
                 "Samples are the biological replicates and are ordered by",
-                "condition. Mean log normalized expression is shown by color; detected-cell",
-                "percentage is shown by dot size."
+                "condition.",
+                summary_plot_copy
               ),
               class = "supporting-copy"
             ),
@@ -357,16 +384,19 @@ explore_ui <- function(id, bundle) {
           ),
           bslib::nav_panel(
             "Pooled condition",
-            htmltools::h3(
-              "Expression by condition — pooled cells",
-              class = "result-title"
+            htmltools::div(
+              class = "result-toolbar",
+              htmltools::h3(
+                "Expression by condition — pooled cells",
+                class = "result-title"
+              ),
+              summary_plot_type_input("condition_plot_type")
             ),
             htmltools::p(
               paste(
                 "This descriptive view pools cells within each condition.",
                 "Use the sample view above to inspect replicate consistency.",
-                "Mean log normalized expression is shown by color and detected-cell",
-                "percentage by dot size."
+                summary_plot_copy
               ),
               class = "supporting-copy"
             ),
@@ -375,12 +405,16 @@ explore_ui <- function(id, bundle) {
           ),
           bslib::nav_panel(
             "By cluster",
-            htmltools::h3(
-              "Expression by final cluster",
-              class = "result-title"
+            htmltools::div(
+              class = "result-toolbar",
+              htmltools::h3(
+                "Expression by final cluster",
+                class = "result-title"
+              ),
+              summary_plot_type_input("cluster_plot_type")
             ),
             htmltools::p(
-              "Mean log normalized expression is shown by color; detected-cell percentage is shown by dot size.",
+              summary_plot_copy,
               class = "supporting-copy"
             ),
             shiny::uiOutput(ns("cluster_summary_plot_ui")),
@@ -580,6 +614,11 @@ explore_server <- function(id, bundle, state) {
       )
     })
 
+    expression_summary_genes <- shiny::reactive({
+      genes <- c(plot_genes(), state$gene_set())
+      genes[!duplicated(casefold_key(genes))]
+    })
+
     plot_gene_data <- shiny::reactive({
       prepare_plot_gene_data(
         bundle,
@@ -683,10 +722,14 @@ explore_server <- function(id, bundle, state) {
         input$color_by %||% "expression",
         expression = if (length(plot_genes()) == 2L) {
           paste(plot_genes(), collapse = " + ") |>
-            paste("blend")
+            paste("expression blend")
         } else {
           plot_genes()[[1L]]
         },
+        detection = paste(
+          paste(plot_genes(), collapse = " + "),
+          "detection"
+        ),
         cluster = "Final cluster",
         condition = "Condition"
       )
@@ -695,12 +738,18 @@ explore_server <- function(id, bundle, state) {
 
     output$umap_legend <- shiny::renderUI({
       if (
-        !identical(input$color_by %||% "expression", "expression") ||
+        !(input$color_by %||% "expression") %in% c(
+          "expression",
+          "detection"
+        ) ||
           length(plot_genes()) != 2L
       ) {
         return(NULL)
       }
-      blend_legend_ui(plot_genes())
+      blend_legend_ui(
+        plot_genes(),
+        mode = input$color_by %||% "expression"
+      )
     })
 
     output$umap <- plotly::renderPlotly({
@@ -750,7 +799,7 @@ explore_server <- function(id, bundle, state) {
 
     selection_summary <- shiny::reactive({
       visible_genes <- paginate_genes(
-        analysis_genes(),
+        expression_summary_genes(),
         input$gene_page %||% 1L,
         25L
       )$genes
@@ -785,8 +834,88 @@ explore_server <- function(id, bundle, state) {
     })
 
     page_info <- shiny::reactive({
-      paginate_genes(analysis_genes(), input$gene_page %||% 1L, 25L)
+      paginate_genes(
+        expression_summary_genes(),
+        input$gene_page %||% 1L,
+        25L
+      )
     })
+
+    page_violin_expression_data <- shiny::reactive({
+      prepare_summary_violin_data(
+        bundle,
+        page_info()$genes
+      )
+    })
+
+    page_violin_data <- shiny::reactive({
+      data <- page_violin_expression_data()
+      data$selected <- data$cell_id %in% as.character(state$selected_cells())
+      data
+    })
+
+    is_dot_summary_plot <- function(plot_type) {
+      identical(plot_type %||% "violin", "dot")
+    }
+
+    summary_plot_height <- function(plot_type) {
+      if (is_dot_summary_plot(plot_type)) {
+        comparison_plot_height(length(page_info()$genes))
+      } else {
+        summary_violin_plot_height(length(page_info()$genes))
+      }
+    }
+
+    summary_plot_output_ui <- function(id, plot_type) {
+      shiny::plotOutput(
+        ns(id),
+        height = paste0(summary_plot_height(plot_type), "px")
+      )
+    }
+
+    make_explore_summary_plot <- function(
+      plot_type,
+      dot_plot,
+      group_by,
+      group_label,
+      rotate_x = FALSE
+    ) {
+      if (is_dot_summary_plot(plot_type)) {
+        return(dot_plot)
+      }
+      make_summary_violin_plot(
+        page_violin_data(),
+        bundle = bundle,
+        group_by = group_by,
+        group_label = group_label,
+        rotate_x = rotate_x
+      )
+    }
+
+    explore_summary_plot_alt <- function(
+      plot_type,
+      scope,
+      detection_scope = "selected cells"
+    ) {
+      if (is_dot_summary_plot(plot_type)) {
+        return(paste(
+          "Dot plot of log normalized expression for",
+          length(page_info()$genes),
+          "genes",
+          scope,
+          "Color shows mean log normalized expression; dot size shows the",
+          "percentage of",
+          detection_scope,
+          "with detected expression."
+        ))
+      }
+      paste(
+        "Violin plots of cell-level log normalized expression for",
+        length(page_info()$genes),
+        "genes",
+        scope
+      )
+    }
 
     shiny::observe({
       page <- page_info()
@@ -841,28 +970,31 @@ explore_server <- function(id, bundle, state) {
     })
 
     output$gene_comparison_plot_ui <- shiny::renderUI({
-      shiny::plotOutput(
-        ns("gene_comparison_plot"),
-        height = paste0(comparison_plot_height(length(page_info()$genes)), "px")
+      summary_plot_output_ui(
+        "gene_comparison_plot",
+        input$comparison_plot_type
       )
     })
 
     output$gene_comparison_plot <- shiny::renderPlot(
       {
-        plot <- make_gene_comparison_plot(page_comparison())
+        plot <- make_explore_summary_plot(
+          input$comparison_plot_type,
+          make_gene_comparison_plot(page_comparison()),
+          group_by = "comparison",
+          group_label = NULL
+        )
         if (is.null(plot)) {
           return(invisible(NULL))
         }
         plot
       },
-      height = function() comparison_plot_height(length(page_info()$genes)),
+      height = function() summary_plot_height(input$comparison_plot_type),
       alt = function() {
-        paste(
-          "Dot plot comparing log normalized expression for",
-          length(page_info()$genes),
-          "genes across all cells, selected cells, and remaining cells.",
-          "Color shows mean log normalized expression; dot size shows the percentage of",
-          "cells with detected expression."
+        explore_summary_plot_alt(
+          input$comparison_plot_type,
+          "across the current comparison groups.",
+          detection_scope = "cells"
         )
       }
     )
@@ -987,54 +1119,65 @@ explore_server <- function(id, bundle, state) {
     })
 
     output$condition_summary_plot_ui <- shiny::renderUI({
-      shiny::plotOutput(
-        ns("condition_summary_plot"),
-        height = paste0(comparison_plot_height(length(page_info()$genes)), "px")
+      summary_plot_output_ui(
+        "condition_summary_plot",
+        input$condition_plot_type
       )
     })
 
     output$condition_summary_plot <- shiny::renderPlot(
-      make_group_summary_plot(
-        condition_page_summary(),
-        group_column = "condition",
-        group_label = "Condition"
-      ),
-      height = function() comparison_plot_height(length(page_info()$genes)),
+      {
+        make_explore_summary_plot(
+          input$condition_plot_type,
+          make_group_summary_plot(
+            condition_page_summary(),
+            group_column = "condition",
+            group_label = "Condition"
+          ),
+          group_by = "condition",
+          group_label = "Condition"
+        )
+      },
+      height = function() summary_plot_height(input$condition_plot_type),
       alt = function() {
-        paste(
-          "Dot plot of log normalized expression for",
-          length(page_info()$genes),
-          "genes across pooled conditions. Color shows mean log normalized expression;",
-          "dot size shows the percentage of selected cells with detected",
-          "expression."
+        explore_summary_plot_alt(
+          input$condition_plot_type,
+          "across pooled conditions."
         )
       }
     )
 
     output$sample_summary_plot_ui <- shiny::renderUI({
-      shiny::plotOutput(
-        ns("sample_summary_plot"),
-        height = paste0(comparison_plot_height(length(page_info()$genes)), "px")
+      summary_plot_output_ui(
+        "sample_summary_plot",
+        input$sample_plot_type
       )
     })
 
     output$sample_summary_plot <- shiny::renderPlot(
-      make_group_summary_plot(
-        sample_page_summary(),
-        group_column = "sample",
-        group_label = "Biological sample",
-        rotate_x = TRUE
-      ),
-      height = function() comparison_plot_height(length(page_info()$genes)),
+      {
+        make_explore_summary_plot(
+          input$sample_plot_type,
+          make_group_summary_plot(
+            sample_page_summary(),
+            group_column = "sample",
+            group_label = "Biological sample",
+            rotate_x = TRUE
+          ),
+          group_by = "sample",
+          group_label = "Biological sample",
+          rotate_x = TRUE
+        )
+      },
+      height = function() summary_plot_height(input$sample_plot_type),
       alt = function() {
-        paste(
-          "Dot plot of log normalized expression for",
-          length(page_info()$genes),
-          "genes across",
-          length(unique(sample_page_summary()$sample)),
-          "biological samples ordered by condition. Color shows mean log",
-          "normalized expression; dot size shows the percentage of selected cells",
-          "with detected expression."
+        explore_summary_plot_alt(
+          input$sample_plot_type,
+          paste(
+            "across",
+            length(unique(sample_page_summary()$sample)),
+            "biological samples ordered by condition."
+          )
         )
       }
     )
@@ -1057,26 +1200,30 @@ explore_server <- function(id, bundle, state) {
     )
 
     output$cluster_summary_plot_ui <- shiny::renderUI({
-      shiny::plotOutput(
-        ns("cluster_summary_plot"),
-        height = paste0(comparison_plot_height(length(page_info()$genes)), "px")
+      summary_plot_output_ui(
+        "cluster_summary_plot",
+        input$cluster_plot_type
       )
     })
 
     output$cluster_summary_plot <- shiny::renderPlot(
-      make_group_summary_plot(
-        cluster_page_summary(),
-        group_column = "cluster",
-        group_label = "Final cluster"
-      ),
-      height = function() comparison_plot_height(length(page_info()$genes)),
+      {
+        make_explore_summary_plot(
+          input$cluster_plot_type,
+          make_group_summary_plot(
+            cluster_page_summary(),
+            group_column = "cluster",
+            group_label = "Final cluster"
+          ),
+          group_by = "cluster",
+          group_label = "Final cluster"
+        )
+      },
+      height = function() summary_plot_height(input$cluster_plot_type),
       alt = function() {
-        paste(
-          "Dot plot of log normalized expression for",
-          length(page_info()$genes),
-          "genes across final clusters. Color shows mean log normalized expression; dot",
-          "size shows the percentage of selected cells with detected",
-          "expression."
+        explore_summary_plot_alt(
+          input$cluster_plot_type,
+          "across final clusters."
         )
       }
     )

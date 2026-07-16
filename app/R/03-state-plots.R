@@ -114,6 +114,15 @@ umap_plot_data <- function(bundle, color_by, gene) {
     cells$color_value <- as.numeric(expression_matrix(bundle, gene)[, 1L])
     cells$color_label <- gene
     cells <- cells[order(cells$color_value, na.last = TRUE), , drop = FALSE]
+  } else if (identical(color_by, "detection")) {
+    matched_gene <- match_bundle_genes(bundle, gene)$genes[[1L]]
+    detected <- as.numeric(bundle$counts[, matched_gene]) > 0
+    cells$color_value <- factor(
+      ifelse(detected, "Detected", "Not detected"),
+      levels = c("Not detected", "Detected")
+    )
+    cells$color_label <- paste(matched_gene, "raw-count detection")
+    cells <- cells[order(cells$color_value), , drop = FALSE]
   } else if (identical(color_by, "cluster")) {
     cells$color_value <- factor(
       as.character(cells$cluster),
@@ -237,12 +246,20 @@ make_umap_plotly <- function(
   gene_data = NULL
 ) {
   genes <- normalize_plot_genes(bundle, gene, default_active_gene(bundle))
-  blend_mode <- identical(color_by, "expression") && length(genes) == 2L
-  if (blend_mode) {
+  expression_blend_mode <- identical(color_by, "expression") &&
+    length(genes) == 2L
+  detection_blend_mode <- identical(color_by, "detection") &&
+    length(genes) == 2L
+  two_gene_color_mode <- expression_blend_mode || detection_blend_mode
+  if (two_gene_color_mode) {
     if (is.null(gene_data)) {
       gene_data <- prepare_plot_gene_data(bundle, genes, selected_cell_ids)
     }
-    data <- prepare_umap_blend_data(gene_data)
+    data <- if (expression_blend_mode) {
+      prepare_umap_expression_blend_data(gene_data)
+    } else {
+      prepare_umap_detection_data(gene_data)
+    }
   } else {
     data <- umap_plot_data(bundle, color_by, genes[[1L]])
   }
@@ -255,23 +272,42 @@ make_umap_plotly <- function(
     "<br>Condition: ",
     data$condition
   )
-  if (blend_mode) {
+  if (expression_blend_mode) {
     hover <- paste0(
       hover,
       "<br>",
       genes[[1L]],
       " Log normalized expression: ",
       formatC(data$expression_1, digits = 4L, format = "fg"),
-      " (Raw detected: ",
-      ifelse(data$detected_1, "yes", "no"),
-      ")<br>",
+      "<br>",
       genes[[2L]],
       " Log normalized expression: ",
-      formatC(data$expression_2, digits = 4L, format = "fg"),
-      " (Raw detected: ",
-      ifelse(data$detected_2, "yes", "no"),
-      ")"
+      formatC(data$expression_2, digits = 4L, format = "fg")
     )
+  } else if (detection_blend_mode) {
+    hover <- paste0(
+      hover,
+      "<br>",
+      genes[[1L]],
+      " Raw detected: ",
+      ifelse(data$detected_1, "yes", "no"),
+      "<br>",
+      genes[[2L]],
+      " Raw detected: ",
+      ifelse(data$detected_2, "yes", "no"),
+      "<br>Detection class: ",
+      data$blend_class
+    )
+  } else if (identical(color_by, "detection")) {
+    hover <- paste0(
+      hover,
+      "<br>",
+      genes[[1L]],
+      " Raw detected: ",
+      ifelse(as.character(data$color_value) == "Detected", "yes", "no")
+    )
+  }
+  if (two_gene_color_mode) {
     plot <- plotly::plot_ly(
       data = data,
       x = ~umap_1,
@@ -324,11 +360,21 @@ make_umap_plotly <- function(
     )
     plot <- plotly::colorbar(
       plot,
-      title = paste(genes[[1L]], "log normalized expression"),
+      title = list(
+        text = paste(genes[[1L]], "log normalized expression"),
+        side = "right"
+      ),
       limits = c(-color_limit, color_limit)
     )
   } else {
-    palette <- discrete_palette(bundle, color_by, data$color_value)
+    palette <- if (identical(color_by, "detection")) {
+      c(
+        "Not detected" = blend_palette()[["Neither detected"]],
+        "Detected" = blend_palette()[["Gene 1"]]
+      )
+    } else {
+      discrete_palette(bundle, color_by, data$color_value)
+    }
     plot <- plotly::plot_ly(
       data = data,
       x = ~umap_1,
@@ -443,19 +489,27 @@ make_umap_ggplot <- function(
   gene_data = NULL
 ) {
   genes <- normalize_plot_genes(bundle, gene, default_active_gene(bundle))
-  blend_mode <- identical(color_by, "expression") && length(genes) == 2L
-  if (blend_mode) {
+  expression_blend_mode <- identical(color_by, "expression") &&
+    length(genes) == 2L
+  detection_blend_mode <- identical(color_by, "detection") &&
+    length(genes) == 2L
+  two_gene_color_mode <- expression_blend_mode || detection_blend_mode
+  if (two_gene_color_mode) {
     if (is.null(gene_data)) {
       gene_data <- prepare_plot_gene_data(bundle, genes, selected_cell_ids)
     }
-    data <- prepare_umap_blend_data(gene_data)
+    data <- if (expression_blend_mode) {
+      prepare_umap_expression_blend_data(gene_data)
+    } else {
+      prepare_umap_detection_data(gene_data)
+    }
   } else {
     data <- umap_plot_data(bundle, color_by, genes[[1L]])
   }
   point_style <- umap_point_style(nrow(data))
   plot <- ggplot2::ggplot(data, ggplot2::aes(x = umap_1, y = umap_2))
   caption <- NULL
-  if (blend_mode) {
+  if (two_gene_color_mode) {
     plot <- plot +
       ggplot2::geom_point(
         ggplot2::aes(color = blend_color),
@@ -463,14 +517,24 @@ make_umap_ggplot <- function(
         alpha = point_style$static_opacity
       ) +
       ggplot2::scale_color_identity()
-    caption <- paste0(
-      "Blend legend — gray: Neither detected; orange: ",
-      genes[[1L]],
-      " detected; blue: ",
-      genes[[2L]],
-      " detected; purple: Both detected",
-      ". Detection uses raw counts."
-    )
+    caption <- if (expression_blend_mode) {
+      paste0(
+        "Expression blend — gray: low both; orange: high ",
+        genes[[1L]],
+        "; blue: high ",
+        genes[[2L]],
+        "; purple: high both. Each gene's log normalized expression is ",
+        "scaled independently from its minimum to maximum across cells."
+      )
+    } else {
+      paste0(
+        "Detection legend — gray: Neither detected; orange: ",
+        genes[[1L]],
+        " detected; blue: ",
+        genes[[2L]],
+        " detected; purple: Both detected. Detection uses raw counts."
+      )
+    }
   } else if (identical(color_by, "expression")) {
     colors <- expression_palette(bundle)
     color_limit <- expression_color_limit(data$color_value)
@@ -490,7 +554,14 @@ make_umap_ggplot <- function(
         name = paste(genes[[1L]], "log normalized expression")
       )
   } else {
-    palette <- discrete_palette(bundle, color_by, data$color_value)
+    palette <- if (identical(color_by, "detection")) {
+      c(
+        "Not detected" = blend_palette()[["Neither detected"]],
+        "Detected" = blend_palette()[["Gene 1"]]
+      )
+    } else {
+      discrete_palette(bundle, color_by, data$color_value)
+    }
     plot <- plot +
       ggplot2::geom_point(
         ggplot2::aes(color = color_value),
@@ -536,11 +607,234 @@ make_umap_ggplot <- function(
     ggplot2::theme_minimal(base_family = "sans", base_size = 11) +
     ggplot2::theme(
       panel.grid = ggplot2::element_blank(),
-      legend.position = if (identical(color_by, "cluster") || blend_mode) {
+      legend.position = if (
+        identical(color_by, "cluster") || two_gene_color_mode
+      ) {
         "none"
       } else {
         "bottom"
       },
+      plot.background = ggplot2::element_rect(fill = "white", color = NA)
+    )
+}
+
+prepare_summary_violin_data <- function(
+  bundle,
+  genes,
+  selected_cell_ids = character()
+) {
+  genes <- match_bundle_genes(bundle, genes)$genes
+  cell_ids <- as.character(bundle$cells$cell_id)
+  selected_cell_ids <- intersect(
+    cell_ids,
+    as.character(selected_cell_ids %||% character())
+  )
+  if (length(genes) == 0L || length(cell_ids) == 0L) {
+    return(data.frame(
+      cell_id = character(),
+      cluster = character(),
+      condition = character(),
+      sample = character(),
+      gene = factor(character(), levels = genes),
+      expression = numeric(),
+      selected = logical(),
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  expression <- expression_matrix(bundle, genes)
+  cell_count <- length(cell_ids)
+  gene_count <- length(genes)
+  data <- data.frame(
+    cell_id = rep(cell_ids, times = gene_count),
+    cluster = rep(bundle$cells$cluster, times = gene_count),
+    condition = rep(bundle$cells$condition, times = gene_count),
+    sample = rep(bundle$cells$sample, times = gene_count),
+    gene = factor(
+      rep(genes, each = cell_count),
+      levels = genes
+    ),
+    expression = as.numeric(expression),
+    selected = rep(cell_ids %in% selected_cell_ids, times = gene_count),
+    stringsAsFactors = FALSE
+  )
+  rownames(data) <- NULL
+  data
+}
+
+summary_violin_plot_data <- function(data, group_by) {
+  group_by <- match.arg(
+    group_by,
+    c("comparison", "sample", "condition", "cluster")
+  )
+  required <- c(
+    "cell_id",
+    "gene",
+    "expression",
+    "selected",
+    setdiff(group_by, "comparison")
+  )
+  missing <- setdiff(required, names(data))
+  if (length(missing) > 0L) {
+    stop(
+      "Summary violin data is missing: ",
+      paste(missing, collapse = ", ")
+    )
+  }
+  if (nrow(data) == 0L) {
+    data$group <- factor(character())
+    return(data)
+  }
+
+  has_selection <- any(data$selected)
+  if (identical(group_by, "comparison")) {
+    has_partial_selection <- has_selection && !all(data$selected)
+    groups <- if (has_partial_selection) {
+      ifelse(data$selected, "Selected cells", "Remaining cells")
+    } else {
+      rep("All cells", nrow(data))
+    }
+    group_levels <- if (has_partial_selection) {
+      c("Selected cells", "Remaining cells")
+    } else {
+      "All cells"
+    }
+  } else {
+    if (has_selection) {
+      data <- data[data$selected, , drop = FALSE]
+    }
+    groups <- as.character(data[[group_by]])
+    if (identical(group_by, "cluster")) {
+      numeric_groups <- suppressWarnings(as.numeric(unique(groups)))
+      group_levels <- if (all(!is.na(numeric_groups))) {
+        as.character(sort(numeric_groups))
+      } else {
+        sort(unique(groups))
+      }
+    } else if (is.factor(data[[group_by]])) {
+      group_levels <- intersect(levels(data[[group_by]]), unique(groups))
+    } else {
+      group_levels <- unique(groups)
+    }
+  }
+
+  data$group <- factor(groups, levels = group_levels)
+  rownames(data) <- NULL
+  data
+}
+
+summary_violin_columns <- function(gene_count) {
+  gene_count <- max(0L, as.integer(gene_count %||% 0L))
+  if (gene_count <= 1L) {
+    1L
+  } else if (gene_count <= 8L) {
+    2L
+  } else {
+    3L
+  }
+}
+
+summary_violin_plot_height <- function(gene_count) {
+  gene_count <- max(0L, as.integer(gene_count %||% 0L))
+  rows <- ceiling(max(1L, gene_count) / summary_violin_columns(gene_count))
+  as.integer(max(360L, 230L * rows))
+}
+
+make_summary_violin_plot <- function(
+  data,
+  bundle = NULL,
+  group_by,
+  group_label,
+  rotate_x = FALSE
+) {
+  data <- summary_violin_plot_data(data, group_by)
+  if (nrow(data) == 0L) {
+    return(NULL)
+  }
+  gene_count <- length(unique(as.character(data$gene)))
+  groups <- levels(droplevels(data$group))
+  palette <- if (
+    !is.null(bundle) && group_by %in% c("condition", "cluster")
+  ) {
+    discrete_palette(bundle, group_by, groups)
+  } else {
+    fallback <- grDevices::hcl.colors(max(3L, length(groups)), "Dark 3")
+    stats::setNames(fallback[seq_along(groups)], groups)
+  }
+  density_group <- interaction(data$gene, data$group, drop = TRUE)
+  density_n <- ave(
+    rep.int(1L, nrow(data)),
+    density_group,
+    FUN = length
+  )
+  violin_data <- data[density_n >= 2L, , drop = FALSE]
+  singleton_data <- data[density_n < 2L, , drop = FALSE]
+
+  plot <- ggplot2::ggplot(
+    data,
+    ggplot2::aes(x = group, y = expression, fill = group)
+  ) +
+    ggplot2::geom_violin(
+      data = violin_data,
+      scale = "width",
+      trim = FALSE,
+      linewidth = 0.3,
+      color = "#42515a",
+      alpha = 0.72,
+      na.rm = TRUE
+    ) +
+    ggplot2::geom_boxplot(
+      width = 0.13,
+      outlier.shape = NA,
+      color = "#17232b",
+      fill = "#fffefb",
+      alpha = 0.78,
+      linewidth = 0.32,
+      na.rm = TRUE
+    ) +
+    ggplot2::geom_hline(
+      yintercept = 0,
+      color = "#6b747a",
+      linewidth = 0.35,
+      linetype = "dashed"
+    )
+  if (nrow(singleton_data) > 0L) {
+    plot <- plot + ggplot2::geom_point(
+      data = singleton_data,
+      shape = 21,
+      size = 2.4,
+      stroke = 0.5,
+      color = "#17232b"
+    )
+  }
+
+  plot +
+    ggplot2::facet_wrap(
+      ~gene,
+      ncol = summary_violin_columns(gene_count)
+    ) +
+    ggplot2::scale_fill_manual(
+      values = palette,
+      guide = if (length(groups) > 1L) "legend" else "none"
+    ) +
+    ggplot2::labs(
+      x = group_label,
+      y = "Log normalized expression",
+      fill = group_label %||% "Cell group"
+    ) +
+    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme(
+      panel.grid.minor = ggplot2::element_blank(),
+      panel.grid.major.x = ggplot2::element_blank(),
+      legend.position = "top",
+      legend.justification = "left",
+      axis.text.x = ggplot2::element_text(
+        face = "bold",
+        color = "#17232b",
+        angle = if (isTRUE(rotate_x)) 30 else 0,
+        hjust = if (isTRUE(rotate_x)) 1 else 0.5
+      ),
+      strip.text = ggplot2::element_text(face = "bold", color = "#17232b"),
       plot.background = ggplot2::element_rect(fill = "white", color = NA)
     )
 }

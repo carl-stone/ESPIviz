@@ -13,13 +13,13 @@ test_that("public data manifest pins one immutable release asset", {
   )
 
   expect_identical(names(manifest), expected_fields)
-  expect_identical(manifest$schema_version, "1.0.0")
-  expect_identical(manifest$data_version, "1.0.0")
+  expect_identical(manifest$schema_version, "1.1.0")
+  expect_identical(manifest$data_version, "1.2.0")
   expect_equal(
     manifest$asset_url,
     paste0(
       "https://github.com/carl-stone/ESPIviz/releases/download/",
-      "data-v1.0.0/espiviz-data-v1.0.0.rds"
+      "data-v1.2.0/espiviz-data-v1.2.0.rds"
     )
   )
   expect_match(manifest$asset_sha256, "^[0-9a-f]{64}$")
@@ -39,7 +39,7 @@ test_that("public data manifest pins one immutable release asset", {
     c(genes = 38394, cells = 3456, clusters = 8, primary_de_rows = 24601) |>
       unname()
   )
-  expect_length(manifest$input_sha256, 8L)
+  expect_length(manifest$input_sha256, 7L)
   expect_true(all(grepl(
     "^[0-9a-f]{64}$",
     unname(unlist(manifest$input_sha256))
@@ -47,7 +47,7 @@ test_that("public data manifest pins one immutable release asset", {
 })
 
 test_that("local release asset matches the public manifest when present", {
-  bundle_path <- file.path(repo_root, "release", "espiviz-data-v1.0.0.rds")
+  bundle_path <- file.path(repo_root, "release", "espiviz-data-v1.2.0.rds")
   testthat::skip_if_not(
     file.exists(bundle_path),
     "Local release asset is not committed"
@@ -63,15 +63,8 @@ test_that("local release asset matches the public manifest when present", {
   bundle <- readRDS(bundle_path)
   expect_silent(validate_bundle(bundle))
   expect_identical(nrow(bundle$primary_de), 24601L)
-  featured_pathway_config <- utils::read.csv(
-    file.path(repo_root, "config", "featured-pathways.csv"),
-    stringsAsFactors = FALSE
-  )
-  expect_identical(nrow(bundle$pathways), nrow(featured_pathway_config))
-  expect_setequal(
-    bundle$pathways$pathway_id,
-    featured_pathway_config$pathway_id
-  )
+  expect_identical(nrow(bundle$pathways), 11089L)
+  expect_true(any(bundle$pathways$p_adjust >= 0.05))
   marker_counts <- table(bundle$markers$cluster)
   expect_true(all(marker_counts <= 25L))
   expect_false(any(grepl(

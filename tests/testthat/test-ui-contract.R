@@ -36,6 +36,17 @@ test_that("secondary full-width panels span their plotting grids", {
   expect_match(about_html, 'col-widths-sm="7,5,12"', fixed = TRUE)
 })
 
+test_that("About describes the complete enrichment browser", {
+  html <- htmltools::renderTags(about_ui("about_test"))$html
+
+  expect_match(
+    html,
+    "complete Gene Ontology Biological Process enrichment results",
+    fixed = TRUE
+  )
+  expect_no_match(html, "featured manuscript-aligned gene sets", fixed = TRUE)
+})
+
 test_that("differential-expression table has a meaningful result heading", {
   html <- htmltools::renderTags(
     differential_expression_ui("de_test")
@@ -53,6 +64,7 @@ test_that("Explore limits UMAP colors and exposes every selection mode", {
   ))$html
 
   expect_match(html, "Log normalized expression", fixed = TRUE)
+  expect_match(html, ">Detection<", fixed = TRUE)
   expect_match(html, ">Cluster<", fixed = TRUE)
   expect_match(html, ">Condition<", fixed = TRUE)
   expect_match(html, "Clear selection", fixed = TRUE)
@@ -93,6 +105,92 @@ test_that("Explore provides plotted summaries by cluster and condition", {
   expect_match(html, "explore_test-condition_summary_plot_ui", fixed = TRUE)
   expect_match(html, "Mean log normalized expression", fixed = TRUE)
   expect_match(html, "dot size", fixed = TRUE)
+})
+
+test_that("expression summary plots default to violins with dot plots available", {
+  html <- htmltools::renderTags(
+    explore_ui("explore_test", synthetic_bundle())
+  )$html
+
+  for (id in c(
+    "comparison_plot_type",
+    "sample_plot_type",
+    "condition_plot_type",
+    "cluster_plot_type"
+  )) {
+    select_id <- paste0("explore_test-", id)
+    pattern <- paste0(
+      '(?s)<select[^>]*id="',
+      select_id,
+      '"[^>]*>.*?</select>'
+    )
+    matched <- regmatches(html, regexpr(pattern, html, perl = TRUE))
+
+    expect_length(matched, 1L)
+    expect_match(
+      matched,
+      '<option value="violin" selected>Violin plot</option>',
+      fixed = TRUE
+    )
+    expect_match(
+      matched,
+      '<option value="dot">Dot plot</option>',
+      fixed = TRUE
+    )
+  }
+})
+
+test_that("expression summary plot selectors switch every rendered plot", {
+  bundle <- synthetic_bundle()
+  state <- new_app_state(bundle)
+  plot_ui_ids <- c(
+    "gene_comparison_plot_ui",
+    "sample_summary_plot_ui",
+    "condition_summary_plot_ui",
+    "cluster_summary_plot_ui"
+  )
+  plot_ids <- c(
+    "gene_comparison_plot",
+    "sample_summary_plot",
+    "condition_summary_plot",
+    "cluster_summary_plot"
+  )
+
+  shiny::testServer(
+    explore_server,
+    args = list(bundle = bundle, state = state),
+    {
+      session$flushReact()
+      for (id in plot_ui_ids) {
+        expect_match(
+          htmltools::renderTags(output[[id]])$html,
+          'height:360px;',
+          fixed = TRUE
+        )
+      }
+      for (id in plot_ids) {
+        expect_silent(output[[id]])
+      }
+
+      session$setInputs(
+        comparison_plot_type = "dot",
+        sample_plot_type = "dot",
+        condition_plot_type = "dot",
+        cluster_plot_type = "dot"
+      )
+      session$flushReact()
+      for (id in plot_ui_ids) {
+        expect_match(
+          htmltools::renderTags(output[[id]])$html,
+          'height:300px;',
+          fixed = TRUE
+        )
+      }
+      for (id in plot_ids) {
+        expect_silent(output[[id]])
+      }
+    }
+  )
 })
 
 test_that("Explore exposes replicate-aware visualization panels", {
@@ -224,19 +322,31 @@ test_that("pathway details render with supported HTML tags", {
 
   expect_match(gsea_html, "<dl>", fixed = TRUE)
   expect_match(gsea_html, "<dt>Method</dt>", fixed = TRUE)
+  expect_match(gsea_html, "<dt>Ontology</dt>", fixed = TRUE)
+  expect_match(
+    gsea_html,
+    "Gene Ontology (GO), Biological Process (BP)",
+    fixed = TRUE
+  )
   expect_match(gsea_html, "Source gene-set size", fixed = TRUE)
   expect_match(gsea_html, "Exported leading-edge genes", fixed = TRUE)
   expect_match(ora_html, "Overlapping genes", fixed = TRUE)
   expect_match(ora_html, "Exported overlapping genes", fixed = TRUE)
 })
 
-test_that("Pathways identifies the bundled terms as a curated subset", {
+test_that("Pathways presents top plots and side-by-side enrichment tables", {
   html <- htmltools::renderTags(pathways_ui("pathways_test"))$html
 
-  expect_match(html, "Curated manuscript terms", fixed = TRUE)
-  expect_match(html, "not an exhaustive list", fixed = TRUE)
-  expect_match(html, ">Featured terms<", fixed = TRUE)
-  expect_no_match(html, ">All featured terms<", fixed = TRUE)
+  expect_match(html, "Top pathway results", fixed = TRUE)
+  expect_match(html, ">Enrichment results<", fixed = TRUE)
+  expect_match(html, ">Genes<", fixed = TRUE)
+  expect_match(html, 'col-widths-sm="9,3"', fixed = TRUE)
+  expect_lt(
+    regexpr(">Enrichment results<", html, fixed = TRUE)[[1L]],
+    regexpr(">Genes<", html, fixed = TRUE)[[1L]]
+  )
+  expect_no_match(html, "Featured", fixed = TRUE)
+  expect_no_match(html, "featured", fixed = TRUE)
 })
 
 test_that("About data links render with supported list tags", {

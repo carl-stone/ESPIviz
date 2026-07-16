@@ -1,9 +1,9 @@
 {
-  "schema_version": "1.0.0",
-  "data_version": "1.0.0",
-  "asset_url": "https://github.com/carl-stone/ESPIviz/releases/download/data-v1.0.0/espiviz-data-v1.0.0.rds",
-  "asset_sha256": "e457bd79f59c760b7bb8c829f86fb86a15f54e666b67ee1918e7c33b5a2b31a6",
-  "asset_bytes": 18517904,
+  "schema_version": "1.1.0",
+  "data_version": "1.2.0",
+  "asset_url": "https://github.com/carl-stone/ESPIviz/releases/download/data-v1.2.0/espiviz-data-v1.2.0.rds",
+  "asset_sha256": "c2bd7213e3a5770364d1508a174e257f82f74470cf4667402e05f2805020269b",
+  "asset_bytes": 39023364,
   "source_sha256": "ed320802451f9f426b1ca1e72b5f8bcd6bbd6f1095693fec17253903e62edc67",
   "dimensions": {
     "genes": 38394,
@@ -15,10 +15,9 @@
     "source_object": "ed320802451f9f426b1ca1e72b5f8bcd6bbd6f1095693fec17253903e62edc67",
     "primary_de": "36d89d84f9539ca1547f997615a0fdf2e8a07e8ff982796af406d4c1000f80c5",
     "markers": "87073fa5b3b06440a3fdf1b962a35ab784681274dc8dd42940e17490c641b86a",
-    "ora_up": "3d3b22bec70b8d169266b7c7616692ece7f58543fa7d62c2e3a379f7d10a08f9",
-    "ora_down": "ad0babcf323ae605917faf839b783d9af72859d4f7cd8d7e2f72b098e857bc95",
+    "ora_up": "ac0a197027d51546ae31ea117944cb29ef2191523d0fd77df9eacee7e8f25545",
+    "ora_down": "5785bbe3812d1db19e0bab239fed1dc5e6ac55890e88f23592aeca86b16db4cb",
     "gsea": "8fa04cb1c7a48041da2edc39c128fbbf65a82e40c25adb67f3b39a536f7e7313",
-    "featured_genes_config": "eff12023c2ca496153bc170a240da3d89da50da0478d9079084f62bca2b0b549",
-    "featured_pathways_config": "c6385bd9c1de677a537e24c791e0ed960bd6c77ae83cd16eccb9f4fe3bd4d9e4"
+    "featured_genes_config": "eff12023c2ca496153bc170a240da3d89da50da0478d9079084f62bca2b0b549"
   }
 }

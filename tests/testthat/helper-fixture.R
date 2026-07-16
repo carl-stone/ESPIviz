@@ -100,7 +100,7 @@ synthetic_bundle <- function(extra_genes = 0L) {
 
   list(
     schema_version = "1.1.0",
-    data_version = "1.1.0",
+    data_version = "1.2.0",
     provenance = list(
       source_sha256 = paste(rep("a", 64), collapse = ""),
       reduction = "umap_pflog_mg_selected_no_filter_cc_dims20",

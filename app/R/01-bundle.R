@@ -371,7 +371,6 @@ validate_bundle <- function(bundle, expected = NULL) {
       anyDuplicated(as.character(bundle$pathways$pathway_id)) ||
       anyNA(bundle$pathways$label) ||
       any(!nzchar(as.character(bundle$pathways$label))) ||
-      anyDuplicated(as.character(bundle$pathways$label)) ||
       any(!as.character(bundle$pathways$source) %in% c("GSEA", "ORA")) ||
       any(
         !as.character(bundle$pathways$direction) %in% c("Control", "E-Stim")
@@ -390,14 +389,14 @@ validate_bundle <- function(bundle, expected = NULL) {
       !is.data.frame(bundle$pathway_genes) ||
       !identical(names(bundle$pathway_genes), c("pathway_id", "gene"))
   ) {
-    stop("The featured pathway tables are invalid.", call. = FALSE)
+    stop("The enrichment result tables are invalid.", call. = FALSE)
   }
   if (
     any(!bundle$pathway_genes$pathway_id %in% bundle$pathways$pathway_id) ||
       any(!bundle$pathway_genes$gene %in% genes)
   ) {
     stop(
-      "The featured pathway genes are outside the public schema.",
+      "The enrichment-result genes are outside the public schema.",
       call. = FALSE
     )
   }

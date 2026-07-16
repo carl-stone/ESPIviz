@@ -2490,34 +2490,34 @@
       "checksum": "6c366cc08cb79833350267fc5fad3e52"
     },
     "data-manifest.json": {
-      "checksum": "a993d28efae2ce5a83e573a5b486a1ee"
+      "checksum": "5a935c1dfcf56862f30617bb8f9b4827"
     },
     "R/00-utils.R": {
       "checksum": "e1e4673a72f96d1c0b27735df508e1b5"
     },
     "R/01-bundle.R": {
-      "checksum": "57c0682712ef9bdd6e4f84baf408d447"
+      "checksum": "b5167115fe24187d5d6fff72309586fa"
     },
     "R/02-expression.R": {
       "checksum": "cd6d0b31e3c494966d789dfc04c29f1d"
     },
     "R/03-state-plots.R": {
-      "checksum": "e5869d6800dfda75843435a661e71d30"
+      "checksum": "99c7084847fdc868abe781a8fb54c3b0"
     },
     "R/04-cell-level.R": {
-      "checksum": "f99f2704dcaa2bdce42024894fd244ae"
+      "checksum": "576e0e3c729eb5a8f4c952277ded6a13"
     },
     "R/10-explore.R": {
-      "checksum": "0d061a69e76a0c17b0f6452e42e2d0ee"
+      "checksum": "e36c640b9047c84df36b486d23312e53"
     },
     "R/20-differential-expression.R": {
       "checksum": "e501715d85e3b313dc13c36e63d18138"
     },
     "R/30-pathways.R": {
-      "checksum": "15c761dd16adb50cbb6303ca7a441f8c"
+      "checksum": "3dff5eb48c7a9b85d9e9bef309720a51"
     },
     "R/40-about.R": {
-      "checksum": "f31b77f59e6248931cc3970ce76f45ff"
+      "checksum": "f91c78ff7caa2b99d4568a77b40f106f"
     },
     "R/90-app-shell.R": {
       "checksum": "282caaa20aff4c841558bbf447d0c0ce"
