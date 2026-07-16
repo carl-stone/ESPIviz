@@ -311,7 +311,7 @@ test_that("public-bundle validator requires usable featured pathways", {
   )
 })
 
-test_that("exporter records scclrR PFlog parameters from raw counts", {
+test_that("exporter stores the exact scclrR PFlog result", {
   testthat::skip_if_not_installed("scclrR")
   counts <- methods::as(Matrix::Matrix(
     matrix(c(10, 0, 5, 20, 15, 0), nrow = 2L),
@@ -322,26 +322,22 @@ test_that("exporter records scclrR PFlog parameters from raw counts", {
   observed <- espiviz_pflog_normalization(counts)
 
   expect_named(observed, c(
-    "method", "target", "log1p", "centered", "alpha", "scale", "k",
-    "cell_count", "gene_count", "package_version", "package_remote_sha",
-    "center_min", "center_max"
-  ), ignore.order = TRUE)
+    "method", "target", "log1p", "centered", "sparse", "center", "k",
+    "alpha", "package_version", "package_remote_sha"
+  ))
   expect_match(observed$method, "scclrR|PFlog", ignore.case = TRUE)
   expect_identical(observed$target, "auto")
   expect_true(observed$log1p)
   expect_true(observed$centered)
   expect_equal(observed$alpha, reference$alpha, tolerance = 1e-12)
-  expect_equal(observed$scale, 4 * reference$alpha, tolerance = 1e-12)
   expect_equal(observed$k, reference$k, tolerance = 1e-12)
-  expect_identical(observed$cell_count, ncol(counts))
-  expect_identical(observed$gene_count, nrow(counts))
+  expect_equal(observed$sparse, reference$sparse, tolerance = 1e-12)
+  expect_equal(observed$center, reference$center, tolerance = 1e-12)
   expect_identical(
     observed$package_version,
     as.character(utils::packageVersion("scclrR"))
   )
   expect_match(observed$package_remote_sha, "^[0-9a-f]{40}$")
-  expect_equal(observed$center_min, min(reference$center), tolerance = 1e-12)
-  expect_equal(observed$center_max, max(reference$center), tolerance = 1e-12)
 })
 
 test_that("source extraction enforces dimensions, reduction, and cluster column", {
@@ -355,13 +351,18 @@ test_that("source extraction enforces dimensions, reduction, and cluster column"
     "10_control", "10_control", "3_estim", "3_estim"
   ))
   expect_false(any(grepl("barcode", extracted$cells$cell_id, fixed = TRUE)))
-  expect_match(
-    extracted$normalization_check$method,
-    "scclrR|PFlog",
-    ignore.case = TRUE
+  expect_equal(
+    extracted$normalization$sparse,
+    scclrR::normalize_matrix(
+      methods::as(Matrix::t(extracted$counts), "dgCMatrix"),
+      target = "auto"
+    )$sparse,
+    tolerance = 1e-12
   )
-  expect_identical(extracted$normalization_check$cell_count, 4L)
-  expect_identical(extracted$normalization_check$gene_count, 3L)
+  expect_identical(
+    colnames(extracted$normalization$sparse),
+    extracted$cells$cell_id
+  )
 
   wrong_dimensions <- contract
   wrong_dimensions$genes <- 4L

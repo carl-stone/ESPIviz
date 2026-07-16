@@ -1,4 +1,4 @@
-ESPIVIZ_SCHEMA_VERSION <- "1.0.0"
+ESPIVIZ_SCHEMA_VERSION <- "1.1.0"
 
 ESPIVIZ_PRODUCTION_EXPECTED <- list(
   schema_version = ESPIVIZ_SCHEMA_VERSION,
@@ -104,6 +104,7 @@ validate_bundle <- function(bundle, expected = NULL) {
     "cells",
     "genes",
     "counts",
+    "normalization",
     "primary_de",
     "markers",
     "pathways",
@@ -163,6 +164,7 @@ validate_bundle <- function(bundle, expected = NULL) {
       call. = FALSE
     )
   }
+
   if (
     any(grepl("barcode|(^|_)qc($|_)", names(bundle$cells), ignore.case = TRUE))
   ) {
@@ -399,6 +401,45 @@ validate_bundle <- function(bundle, expected = NULL) {
       call. = FALSE
     )
   }
+
+  normalization <- bundle$normalization
+  normalization_names <- c(
+    "method", "target", "log1p", "centered", "sparse", "center", "k",
+    "alpha", "package_version", "package_remote_sha"
+  )
+  if (
+    !is.list(normalization) ||
+      !identical(names(normalization), normalization_names) ||
+      !identical(normalization$method, "scclrR::normalize_matrix") ||
+      !identical(normalization$target, "auto") ||
+      !isTRUE(normalization$log1p) ||
+      !isTRUE(normalization$centered) ||
+      !inherits(normalization$sparse, "dgCMatrix") ||
+      !identical(dim(normalization$sparse), rev(dim(bundle$counts))) ||
+      !identical(rownames(normalization$sparse), genes) ||
+      !identical(colnames(normalization$sparse), bundle$cells$cell_id) ||
+      any(!is.finite(normalization$sparse@x)) ||
+      !is.numeric(normalization$center) ||
+      length(normalization$center) != nrow(bundle$cells) ||
+      !identical(names(normalization$center), bundle$cells$cell_id) ||
+      any(!is.finite(normalization$center)) ||
+      !is.numeric(normalization$k) ||
+      length(normalization$k) != 1L ||
+      !is.finite(normalization$k) ||
+      normalization$k <= 0 ||
+      !is.numeric(normalization$alpha) ||
+      length(normalization$alpha) != 1L ||
+      !is.finite(normalization$alpha) ||
+      normalization$alpha <= 0 ||
+      !is.character(normalization$package_version) ||
+      length(normalization$package_version) != 1L ||
+      !nzchar(normalization$package_version) ||
+      !is.character(normalization$package_remote_sha) ||
+      length(normalization$package_remote_sha) != 1L ||
+      !grepl("^[0-9a-f]{40}$", normalization$package_remote_sha)
+  ) {
+    stop("The exported scclrR normalization state is invalid.", call. = FALSE)
+  }
   if (!is.list(bundle$featured_gene_sets)) {
     stop("Featured gene sets must be stored as a named list.", call. = FALSE)
   }
@@ -577,7 +618,6 @@ load_bundle <- function(
 
   bundle <- readRDS(path)
   validate_bundle(bundle, expected %||% manifest_expected(manifest))
-  attr(bundle, "pflog_state") <- compute_pflog_state(bundle$counts)
   attr(bundle, "bundle_path") <- normalizePath(path, mustWork = TRUE)
   attr(bundle, "data_manifest") <- manifest
   bundle
