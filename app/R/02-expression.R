@@ -1,104 +1,45 @@
-estimate_pflog_alpha <- function(counts) {
-  if (is.null(dim(counts)) || length(dim(counts)) != 2L) {
-    stop("PFlog alpha estimation requires a cell-by-gene count matrix.", call. = FALSE)
-  }
-  if (nrow(counts) == 0L || ncol(counts) == 0L) {
-    stop("PFlog alpha estimation requires cells and genes.", call. = FALSE)
-  }
-  values <- if (inherits(counts, "sparseMatrix")) counts@x else as.numeric(counts)
-  if (any(!is.finite(values)) || any(values < 0)) {
-    stop("PFlog counts must be finite and non-negative.", call. = FALSE)
-  }
-
-  cell_count <- nrow(counts)
-  gene_mean <- as.numeric(Matrix::colSums(counts)) / cell_count
-  squared <- counts
-  if (inherits(squared, "sparseMatrix")) {
-    squared@x <- squared@x^2
-    gene_second_moment <- as.numeric(Matrix::colSums(squared)) / cell_count
-  } else {
-    gene_second_moment <- colSums(as.matrix(squared)^2) / cell_count
-  }
-  gene_variance <- gene_second_moment - gene_mean^2
-  denominator <- sum(gene_mean^4)
-  alpha <- sum((gene_variance - gene_mean) * gene_mean^2) / denominator
-  if (!is.finite(alpha) || alpha <= 0) {
-    stop(
-      "scclrR PFlog target='auto' could not estimate a positive alpha.",
-      call. = FALSE
-    )
-  }
-  unname(alpha)
-}
-
-compute_pflog_state <- function(counts) {
-  if (!requireNamespace("Matrix", quietly = TRUE)) {
-    stop("The Matrix package is required for PFlog normalization.", call. = FALSE)
-  }
-  alpha <- estimate_pflog_alpha(counts)
-  scale <- 4 * alpha
-  shifted <- counts
-  if (inherits(shifted, "sparseMatrix")) {
-    shifted@x <- log1p(scale * shifted@x)
-    center <- as.numeric(Matrix::rowSums(shifted)) / ncol(shifted)
-  } else {
-    shifted <- log1p(scale * as.matrix(shifted))
-    center <- rowMeans(shifted)
-  }
-  names(center) <- rownames(counts)
-  mean_depth <- sum(counts) / nrow(counts)
-  list(
-    method = "scclrR PFlog",
-    target = "auto",
-    log1p = TRUE,
-    centered = TRUE,
-    alpha = alpha,
-    scale = scale,
-    k = scale * mean_depth,
-    center = center
-  )
-}
-
-pflog_state <- function(bundle) {
-  state <- attr(bundle, "pflog_state", exact = TRUE)
-  if (is.null(state)) {
-    state <- compute_pflog_state(bundle$counts)
-  }
+normalization_state <- function(bundle) {
+  state <- bundle$normalization
   if (
     !is.list(state) ||
+      !inherits(state$sparse, "sparseMatrix") ||
       !is.numeric(state$alpha) ||
       length(state$alpha) != 1L ||
       !is.finite(state$alpha) ||
       state$alpha <= 0 ||
       !is.numeric(state$center) ||
       length(state$center) != nrow(bundle$cells) ||
-      any(!is.finite(state$center))
+      any(!is.finite(state$center)) ||
+      !identical(dim(state$sparse), rev(dim(bundle$counts)))
   ) {
-    stop("The cached PFlog normalization state is invalid.", call. = FALSE)
+    stop("The exported scclrR normalization state is invalid.", call. = FALSE)
   }
   state
 }
 
-normalize_gene_expression <- function(counts, alpha, center) {
-  alpha <- as.numeric(alpha)
+center_shifted_expression <- function(shifted, center) {
   center <- as.numeric(center)
-  if (length(alpha) != 1L || !is.finite(alpha) || alpha <= 0) {
-    stop("PFlog alpha must be one positive finite value.", call. = FALSE)
+  values <- if (inherits(shifted, "sparseMatrix")) {
+    shifted@x
+  } else {
+    as.numeric(shifted)
   }
-  values <- if (inherits(counts, "sparseMatrix")) counts@x else as.numeric(counts)
-  if (any(!is.finite(values)) || any(values < 0)) {
-    stop("PFlog counts must be finite and non-negative.", call. = FALSE)
+  if (any(!is.finite(values)) || any(!is.finite(center))) {
+    stop("Exported scclrR values and centers must be finite.", call. = FALSE)
   }
-  if (is.null(dim(counts))) {
-    if (length(counts) != length(center)) {
-      stop("Counts and PFlog centers must have the same length.", call. = FALSE)
+  if (is.null(dim(shifted))) {
+    if (length(shifted) != length(center)) {
+      stop(
+        "Shifted values and scclrR centers must have the same length.",
+        call. = FALSE
+      )
     }
-    return(log1p(4 * alpha * as.numeric(counts)) - center)
+    return(as.numeric(shifted) - center)
   }
-  if (nrow(counts) != length(center)) {
-    stop("Count-matrix rows must match the PFlog center vector.", call. = FALSE)
+  if (nrow(shifted) != length(center)) {
+    stop("Shifted-matrix rows must match the scclrR center vector.", call. = FALSE)
   }
-  sweep(log1p(4 * alpha * as.matrix(counts)), 1L, center, "-")
+  sweep(as.matrix(shifted), 1L, center, "-")
 }
 
 parse_gene_input <- function(text, universe, max_genes = Inf) {
@@ -210,10 +151,10 @@ expression_matrix <- function(bundle, genes, cell_ids = NULL) {
     attr(result, "missing_genes") <- parsed$missing
     return(result)
   }
-  state <- pflog_state(bundle)
-  result <- normalize_gene_expression(
-    bundle$counts[cell_index, gene_index, drop = FALSE],
-    state$alpha,
+  state <- normalization_state(bundle)
+  shifted <- Matrix::t(state$sparse[gene_index, cell_index, drop = FALSE])
+  result <- center_shifted_expression(
+    shifted,
     state$center[cell_index]
   )
   rownames(result) <- bundle$cells$cell_id[cell_index]
@@ -272,7 +213,7 @@ summarize_selection <- function(
   include_splits = TRUE,
   chunk_size = 128L
 ) {
-  state <- pflog_state(bundle)
+  state <- normalization_state(bundle)
   parsed <- match_bundle_genes(bundle, genes)
   all_ids <- as.character(bundle$cells$cell_id)
   selected_cell_ids <- intersect(
@@ -319,9 +260,13 @@ summarize_selection <- function(
         gene_index[columns],
         drop = FALSE
       ])
-      all_expression <- normalize_gene_expression(
-        all_counts,
-        state$alpha,
+      all_shifted <- Matrix::t(state$sparse[
+        gene_index[columns],
+        ,
+        drop = FALSE
+      ])
+      all_expression <- center_shifted_expression(
+        all_shifted,
         state$center
       )
       colnames(all_counts) <- parsed$genes[columns]
@@ -455,7 +400,7 @@ selection_summary_export <- function(bundle, selected_cell_ids, genes) {
 }
 
 selection_expression_export <- function(bundle, selected_cell_ids, genes) {
-  state <- pflog_state(bundle)
+  state <- normalization_state(bundle)
   parsed <- match_bundle_genes(bundle, genes)
   all_ids <- as.character(bundle$cells$cell_id)
   selected_cell_ids <- intersect(
@@ -481,9 +426,9 @@ selection_expression_export <- function(bundle, selected_cell_ids, genes) {
     ))
   }
   counts <- as.matrix(bundle$counts[cell_index, gene_index, drop = FALSE])
-  normalized <- normalize_gene_expression(
-    counts,
-    state$alpha,
+  shifted <- Matrix::t(state$sparse[gene_index, cell_index, drop = FALSE])
+  normalized <- center_shifted_expression(
+    shifted,
     state$center[cell_index]
   )
   rows <- rep(seq_along(cell_index), times = length(gene_index))
@@ -510,7 +455,7 @@ write_selection_expression_export <- function(
   genes,
   file
 ) {
-  state <- pflog_state(bundle)
+  state <- normalization_state(bundle)
   parsed <- match_bundle_genes(bundle, genes)
   all_ids <- as.character(bundle$cells$cell_id)
   selected_cell_ids <- intersect(
@@ -529,20 +474,10 @@ write_selection_expression_export <- function(
     gene_index <- seq_len(ncol(bundle$counts))
     parsed$genes <- bundle_gene_names(bundle)
   }
-  complete_matrix <- identical(cell_index, seq_len(nrow(bundle$counts))) &&
-    identical(gene_index, seq_len(ncol(bundle$counts)))
-  shifted <- if (complete_matrix) {
-    bundle$counts
-  } else {
-    methods::as(
-      bundle$counts[cell_index, gene_index, drop = FALSE],
-      "dgCMatrix"
-    )
-  }
-  if (length(shifted@x) > 0L) {
-    shifted@x <- log1p(state$scale * shifted@x)
-  }
-  shifted <- methods::as(Matrix::t(shifted), "dgCMatrix")
+  shifted <- methods::as(
+    state$sparse[gene_index, cell_index, drop = FALSE],
+    "dgCMatrix"
+  )
   centers <- state$center[cell_index]
   names(centers) <- bundle$cells$cell_id[cell_index]
   export <- list(

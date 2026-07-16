@@ -17,8 +17,8 @@ espiviz_require <- function(package) {
 
 espiviz_contract <- function() {
   list(
-    schema_version = "1.0.0",
-    data_version = "1.1.1",
+    schema_version = "1.1.0",
+    data_version = "1.2.0",
     reduction = "umap_pflog_mg_selected_no_filter_cc_dims20",
     cluster_column = "cluster_pflog_mg_selected_no_filter_cc_dims20_res0.5",
     genes = 38394L,
@@ -209,13 +209,10 @@ espiviz_pflog_normalization <- function(counts) {
     target = "auto",
     log1p = TRUE,
     centered = TRUE,
-    alpha = unname(as.numeric(normalized$alpha)),
-    scale = unname(4 * as.numeric(normalized$alpha)),
+    sparse = normalized$sparse,
+    center = unname(as.numeric(normalized$center)),
     k = unname(as.numeric(normalized$k)),
-    cell_count = ncol(counts),
-    gene_count = nrow(counts),
-    center_min = unname(min(normalized$center)),
-    center_max = unname(max(normalized$center)),
+    alpha = unname(as.numeric(normalized$alpha)),
     package_version = as.character(utils::packageVersion("scclrR")),
     package_remote_sha = as.character(remote_sha)
   )
@@ -342,12 +339,14 @@ espiviz_extract_source <- function(object, contract = espiviz_contract()) {
   if (any(!is.finite(library_size)) || any(library_size <= 0)) {
     espiviz_abort("Cell library sizes must be finite and greater than zero.")
   }
-  normalization_check <- espiviz_pflog_normalization(counts)
+  normalization <- espiviz_pflog_normalization(counts)
 
   internal_ids <- sprintf(
     paste0("cell_%0", nchar(as.character(contract$cells)), "d"),
     seq_len(contract$cells)
   )
+  colnames(normalization$sparse) <- internal_ids
+  names(normalization$center) <- internal_ids
   cells <- data.frame(
     cell_id = internal_ids,
     umap_1 = unname(umap[, 1L]),
@@ -376,7 +375,7 @@ espiviz_extract_source <- function(object, contract = espiviz_contract()) {
       stringsAsFactors = FALSE
     ),
     counts = cell_gene_counts,
-    normalization_check = normalization_check
+    normalization = normalization
   )
 }
 
@@ -819,6 +818,7 @@ espiviz_validate_public_bundle <- function(
     "cells",
     "genes",
     "counts",
+    "normalization",
     "primary_de",
     "markers",
     "pathways",
@@ -918,6 +918,45 @@ espiviz_validate_public_bundle <- function(
     ))
   ) {
     espiviz_abort("Bundle library sizes do not equal raw-count row sums.")
+  }
+
+  normalization <- bundle$normalization
+  normalization_names <- c(
+    "method", "target", "log1p", "centered", "sparse", "center", "k",
+    "alpha", "package_version", "package_remote_sha"
+  )
+  if (
+    !is.list(normalization) ||
+      !identical(names(normalization), normalization_names) ||
+      !identical(normalization$method, "scclrR::normalize_matrix") ||
+      !identical(normalization$target, "auto") ||
+      !isTRUE(normalization$log1p) ||
+      !isTRUE(normalization$centered) ||
+      !inherits(normalization$sparse, "dgCMatrix") ||
+      !identical(dim(normalization$sparse), rev(dim(bundle$counts))) ||
+      !identical(rownames(normalization$sparse), bundle$genes$gene) ||
+      !identical(colnames(normalization$sparse), bundle$cells$cell_id) ||
+      any(!is.finite(normalization$sparse@x)) ||
+      !is.numeric(normalization$center) ||
+      length(normalization$center) != nrow(bundle$cells) ||
+      !identical(names(normalization$center), bundle$cells$cell_id) ||
+      any(!is.finite(normalization$center)) ||
+      !is.numeric(normalization$k) ||
+      length(normalization$k) != 1L ||
+      !is.finite(normalization$k) ||
+      normalization$k <= 0 ||
+      !is.numeric(normalization$alpha) ||
+      length(normalization$alpha) != 1L ||
+      !is.finite(normalization$alpha) ||
+      normalization$alpha <= 0 ||
+      !is.character(normalization$package_version) ||
+      length(normalization$package_version) != 1L ||
+      !nzchar(normalization$package_version) ||
+      !is.character(normalization$package_remote_sha) ||
+      length(normalization$package_remote_sha) != 1L ||
+      !grepl("^[0-9a-f]{40}$", normalization$package_remote_sha)
+  ) {
+    espiviz_abort("Bundle scclrR normalization state is invalid.")
   }
 
   espiviz_require_columns(
@@ -1207,7 +1246,20 @@ espiviz_build_bundle <- function(manifest_path, contract = espiviz_contract()) {
         "scclrR PFlog (target = 'auto', log1p = TRUE, center = TRUE);",
         "dense expression = shifted sparse value - cell center"
       ),
-      normalization_check = source$normalization_check,
+      normalization_check = list(
+        method = source$normalization$method,
+        target = source$normalization$target,
+        log1p = source$normalization$log1p,
+        centered = source$normalization$centered,
+        alpha = source$normalization$alpha,
+        k = source$normalization$k,
+        cell_count = nrow(source$cells),
+        gene_count = nrow(source$genes),
+        center_min = min(source$normalization$center),
+        center_max = max(source$normalization$center),
+        package_version = source$normalization$package_version,
+        package_remote_sha = source$normalization$package_remote_sha
+      ),
       dimensions = list(
         genes = nrow(source$genes),
         cells = nrow(source$cells),
@@ -1221,6 +1273,7 @@ espiviz_build_bundle <- function(manifest_path, contract = espiviz_contract()) {
     cells = source$cells,
     genes = source$genes,
     counts = source$counts,
+    normalization = source$normalization,
     primary_de = primary_de,
     markers = markers,
     pathways = pathway_results$pathways,

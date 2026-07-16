@@ -13,13 +13,13 @@ test_that("public data manifest pins one immutable release asset", {
   )
 
   expect_identical(names(manifest), expected_fields)
-  expect_identical(manifest$schema_version, "1.0.0")
-  expect_identical(manifest$data_version, "1.1.1")
+  expect_identical(manifest$schema_version, "1.1.0")
+  expect_identical(manifest$data_version, "1.2.0")
   expect_equal(
     manifest$asset_url,
     paste0(
       "https://github.com/carl-stone/ESPIviz/releases/download/",
-      "data-v1.1.1/espiviz-data-v1.1.1.rds"
+      "data-v1.2.0/espiviz-data-v1.2.0.rds"
     )
   )
   expect_match(manifest$asset_sha256, "^[0-9a-f]{64}$")
@@ -47,7 +47,7 @@ test_that("public data manifest pins one immutable release asset", {
 })
 
 test_that("local release asset matches the public manifest when present", {
-  bundle_path <- file.path(repo_root, "release", "espiviz-data-v1.1.1.rds")
+  bundle_path <- file.path(repo_root, "release", "espiviz-data-v1.2.0.rds")
   testthat::skip_if_not(
     file.exists(bundle_path),
     "Local release asset is not committed"

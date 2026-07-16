@@ -1,64 +1,40 @@
-test_that("PFlog applies the shifted centered log-ratio formula", {
-  expect_app_helper("normalize_gene_expression")
+test_that("runtime expression only applies scclrR's exported centers", {
+  expect_app_helper("center_shifted_expression")
 
-  counts <- c(10, 0, 25, 100)
-  alpha <- 0.125
+  shifted <- c(1.2, 0, 2.5, 4.1)
   center <- c(0.2, 0.4, 0.6, 0.8)
 
-  observed <- normalize_gene_expression(counts, alpha, center)
-  expected <- log1p(4 * alpha * counts) - center
+  observed <- center_shifted_expression(shifted, center)
+  expected <- shifted - center
 
   expect_equal(observed, expected, tolerance = 1e-12)
   expect_identical(observed[[2]], -center[[2]])
 })
 
-test_that("PFlog rejects invalid alpha and cell centers", {
-  expect_app_helper("normalize_gene_expression")
+test_that("runtime expression rejects invalid exported centers", {
+  expect_app_helper("center_shifted_expression")
 
   expect_error(
-    normalize_gene_expression(1, 0, 0),
-    "alpha|positive",
-    ignore.case = TRUE
-  )
-  expect_error(
-    normalize_gene_expression(c(1, 2), 0.1, 0),
+    center_shifted_expression(c(1, 2), 0),
     "center|length",
     ignore.case = TRUE
   )
 })
 
-test_that("PFlog state and expression are numerically identical to scclrR", {
+test_that("the synthetic bundle stores values produced by scclrR", {
   testthat::skip_if_not_installed("scclrR")
-  expect_app_helper("compute_pflog_state")
-  expect_app_helper("normalize_gene_expression")
+  expect_app_helper("normalization_state")
 
   bundle <- synthetic_bundle()
-  state <- compute_pflog_state(bundle$counts)
+  state <- normalization_state(bundle)
   reference <- scclrR::normalize_matrix(
     Matrix::t(bundle$counts),
-    target = "auto"
-  )
-  reference_dense <- t(as.matrix(reference$sparse))
-  reference_dense <- sweep(reference_dense, 1L, reference$center, "-")
-  observed <- normalize_gene_expression(
-    bundle$counts,
-    state$alpha,
-    state$center
+    target = "auto",
+    alpha = 0.125
   )
 
-  expect_equal(state$alpha, reference$alpha, tolerance = 1e-12)
-  expect_equal(state$scale, 4 * reference$alpha, tolerance = 1e-12)
-  expect_equal(state$k, reference$k, tolerance = 1e-12)
+  expect_equal(state$sparse, reference$sparse, tolerance = 1e-12)
   expect_equal(unname(state$center), reference$center, tolerance = 1e-12)
-  expect_equal(observed, reference_dense, tolerance = 1e-12)
-
-  zero_index <- as.matrix(bundle$counts) == 0
-  expected_zeros <- -state$center[row(zero_index)[zero_index]]
-  expect_equal(
-    unname(observed[zero_index]),
-    unname(expected_zeros),
-    tolerance = 1e-12
-  )
 })
 
 test_that("sparse expression lookup loads its matrix runtime in a fresh process", {

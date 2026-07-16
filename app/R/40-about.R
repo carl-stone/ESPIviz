@@ -236,7 +236,7 @@ about_server <- function(id, bundle) {
           attributes(clean_bundle) <- attributes(clean_bundle)[
             setdiff(
               names(attributes(clean_bundle)),
-              c("bundle_path", "data_manifest", "pflog_state")
+              c("bundle_path", "data_manifest")
             )
           ]
           saveRDS(clean_bundle, file, compress = "xz")

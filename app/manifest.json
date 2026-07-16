@@ -2490,16 +2490,16 @@
       "checksum": "6c366cc08cb79833350267fc5fad3e52"
     },
     "data-manifest.json": {
-      "checksum": "3542f01cc8aa2381083a7c65de19dcf7"
+      "checksum": "5a935c1dfcf56862f30617bb8f9b4827"
     },
     "R/00-utils.R": {
       "checksum": "e1e4673a72f96d1c0b27735df508e1b5"
     },
     "R/01-bundle.R": {
-      "checksum": "10e41354842078ee92cc5459760ac2b3"
+      "checksum": "b5167115fe24187d5d6fff72309586fa"
     },
     "R/02-expression.R": {
-      "checksum": "eca3c3eb1f71b5c8af77e7a29471f89f"
+      "checksum": "cd6d0b31e3c494966d789dfc04c29f1d"
     },
     "R/03-state-plots.R": {
       "checksum": "99c7084847fdc868abe781a8fb54c3b0"
@@ -2517,7 +2517,7 @@
       "checksum": "3dff5eb48c7a9b85d9e9bef309720a51"
     },
     "R/40-about.R": {
-      "checksum": "2a66c93575082a112a878b72bf5f8bb0"
+      "checksum": "f91c78ff7caa2b99d4568a77b40f106f"
     },
     "R/90-app-shell.R": {
       "checksum": "282caaa20aff4c841558bbf447d0c0ce"

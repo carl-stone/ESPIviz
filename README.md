@@ -26,9 +26,10 @@ PFlog[i,j] = log1p(4 × alpha × count[i,j]) - cell_center[i]
 
 The center is calculated across the complete gene universe, so a zero count can
 have a negative PFlog value. Detection percentages always use raw counts. The
-Shiny runtime implements this sparse transformation directly and is tested for
-numerical identity with `scclrR`; it does not install the Rust-backed package in
-the deployment image.
+standalone exporter runs `scclrR` and stores its shifted sparse matrix and
+per-cell center vector in the bundle. The Shiny runtime only reconstructs dense
+values by subtracting those exported centers; it does not implement PFlog or
+install the Rust-backed package in the deployment image.
 
 For a two-gene UMAP blend, raw counts determine whether each gene is detected.
 Color intensity then increases with that gene's PFlog strength among detected
@@ -36,10 +37,9 @@ cells; double-negative cells remain neutral and double-positive cells mix the
 two feature colors. Violin and gene-pair scatter plots retain the centered PFlog
 scale and report raw-count detection separately.
 
-The pinned v1.0.0 data asset remains byte-for-byte immutable. It contains the
-raw counts needed for PFlog plus its original release-era normalization label;
-current expression values are defined by the PFlog code and are not read from a
-stored normalized layer.
+The pinned v1.0.0 data asset remains byte-for-byte immutable. Bundle schema
+v1.1.0 adds the exact normalization values returned by the pinned `scclrR`
+revision.
 
 ## Repository contents
 
@@ -78,7 +78,7 @@ before building data. `just data-dry-run` validates those inputs without writing
 a bundle. To run against a local bundle:
 
 ```sh
-just app-run /absolute/path/to/espiviz-data-v1.1.1.rds
+just app-run /absolute/path/to/espiviz-data-v1.2.0.rds
 ```
 
 `just manifest` scans `app/` only, keeping Seurat, `scclrR`, and other exporter

@@ -6,12 +6,8 @@ test_that("single- and multi-cell selections match direct calculations", {
   expect_app_helper("summarize_selection")
   bundle <- synthetic_bundle()
   selected <- bundle$cells$cell_id[c(1, 2)]
-  pflog <- pflog_state(bundle)
-  expression <- normalize_gene_expression(
-    as.numeric(bundle$counts[, "Glul"]),
-    pflog$alpha,
-    pflog$center
-  )
+  expression <- as.numeric(bundle$normalization$sparse["Glul", ]) -
+    bundle$normalization$center
   raw_counts <- as.numeric(bundle$counts[, "Glul"])
   selected_index <- bundle$cells$cell_id %in% selected
 
@@ -129,12 +125,9 @@ test_that("selected-cell summaries split by condition and cluster", {
   ]
   control_ids <- selected[bundle$cells$condition[match(selected, bundle$cells$cell_id)] == "p27CKO"]
   control_index <- match(control_ids, bundle$cells$cell_id)
-  pflog <- pflog_state(bundle)
-  expected_expression <- normalize_gene_expression(
-    as.numeric(bundle$counts[control_index, "Glul"]),
-    pflog$alpha,
-    pflog$center[control_index]
-  )
+  expected_expression <-
+    as.numeric(bundle$normalization$sparse["Glul", control_index]) -
+    bundle$normalization$center[control_index]
   expect_equal(control_glul$mean_expression, mean(expected_expression))
   expect_equal(control_glul$median_expression, stats::median(expected_expression))
   expect_equal(control_glul$detected_n, sum(bundle$counts[control_index, "Glul"] > 0))

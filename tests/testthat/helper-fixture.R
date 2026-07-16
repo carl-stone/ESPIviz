@@ -28,6 +28,11 @@ synthetic_bundle <- function(extra_genes = 0L) {
   cell_ids <- paste0("cell_", seq_len(nrow(raw_counts)))
   dimnames(raw_counts) <- list(cell_ids, genes)
   counts <- methods::as(Matrix::Matrix(raw_counts, sparse = TRUE), "dgCMatrix")
+  shifted <- counts
+  shifted@x <- log1p(0.5 * shifted@x)
+  shifted <- methods::as(Matrix::t(shifted), "dgCMatrix")
+  center <- as.numeric(Matrix::colSums(shifted)) / nrow(shifted)
+  names(center) <- cell_ids
 
   cells <- data.frame(
     cell_id = cell_ids,
@@ -94,8 +99,8 @@ synthetic_bundle <- function(extra_genes = 0L) {
   )
 
   list(
-    schema_version = "1.0.0",
-    data_version = "1.1.1",
+    schema_version = "1.1.0",
+    data_version = "1.2.0",
     provenance = list(
       source_sha256 = paste(rep("a", 64), collapse = ""),
       reduction = "umap_pflog_mg_selected_no_filter_cc_dims20",
@@ -116,6 +121,18 @@ synthetic_bundle <- function(extra_genes = 0L) {
       stringsAsFactors = FALSE
     ),
     counts = counts,
+    normalization = list(
+      method = "scclrR::normalize_matrix",
+      target = "auto",
+      log1p = TRUE,
+      centered = TRUE,
+      sparse = shifted,
+      center = center,
+      k = 50,
+      alpha = 0.125,
+      package_version = "0.1.0",
+      package_remote_sha = paste(rep("c", 40), collapse = "")
+    ),
     primary_de = primary_de,
     markers = markers,
     pathways = pathways,
@@ -129,7 +146,7 @@ synthetic_bundle <- function(extra_genes = 0L) {
 
 synthetic_expectations <- function(bundle = synthetic_bundle()) {
   list(
-    schema_version = "1.0.0",
+    schema_version = "1.1.0",
     cells = nrow(bundle$cells),
     genes = nrow(bundle$genes),
     clusters = length(unique(as.character(bundle$cells$cluster))),

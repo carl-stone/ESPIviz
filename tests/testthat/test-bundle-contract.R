@@ -6,6 +6,32 @@ test_that("synthetic bundle satisfies the public schema", {
   expect_identical(rownames(bundle$counts), bundle$cells$cell_id)
   expect_identical(colnames(bundle$counts), bundle$genes$gene)
   expect_true(inherits(bundle$counts, "dgCMatrix"))
+  expect_true(inherits(bundle$normalization$sparse, "dgCMatrix"))
+  expect_identical(
+    dim(bundle$normalization$sparse),
+    rev(dim(bundle$counts))
+  )
+})
+
+test_that("bundle validation requires exported scclrR values", {
+  bundle <- synthetic_bundle()
+  expected <- synthetic_expectations(bundle)
+
+  missing_normalization <- bundle
+  missing_normalization$normalization <- NULL
+  expect_error(
+    validate_bundle(missing_normalization, expected = expected),
+    "normalization",
+    ignore.case = TRUE
+  )
+
+  invalid_center <- bundle
+  invalid_center$normalization$center <- invalid_center$normalization$center[-1L]
+  expect_error(
+    validate_bundle(invalid_center, expected = expected),
+    "normalization|center",
+    ignore.case = TRUE
+  )
 })
 
 test_that("bundle validation rejects dimension and cell-order drift", {
@@ -194,7 +220,7 @@ test_that("bundle loading verifies the asset checksum", {
   path <- tempfile(fileext = ".rds")
   saveRDS(bundle, path, version = 3)
   hash <- digest::digest(file = path, algo = "sha256", serialize = FALSE)
-  manifest <- list(sha256 = hash, schema_version = "1.0.0")
+  manifest <- list(sha256 = hash, schema_version = "1.1.0")
 
   expect_silent(
     load_bundle(path, manifest, expected = synthetic_expectations(bundle))
