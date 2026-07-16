@@ -96,6 +96,26 @@ test_that("Explore exposes an explicit whole-cluster selection control", {
   expect_match(html, "explore_test-select_cluster_cells", fixed = TRUE)
 })
 
+test_that("Explore cluster menu can extend beyond the current-selection card", {
+  styles <- paste(
+    readLines(
+      file.path(repo_root, "app", "www", "styles.css"),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+
+  expect_match(
+    styles,
+    paste0(
+      "(?s)[.]selection-card-compact[ ]*,[[:space:]]*",
+      "[.]selection-card-compact[ ]+[.]card-body[[:space:]]*",
+      "\\{[^}]*overflow:[[:space:]]*visible;"
+    ),
+    perl = TRUE
+  )
+})
+
 test_that("Explore provides plotted summaries by cluster and condition", {
   html <- htmltools::renderTags(
     explore_ui("explore_test", synthetic_bundle())

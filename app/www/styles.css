@@ -133,6 +133,11 @@ h3,
   display: block;
 }
 
+.selection-card-compact,
+.selection-card-compact .card-body {
+  overflow: visible;
+}
+
 .umap-side-rail {
   align-content: start;
   display: grid;
