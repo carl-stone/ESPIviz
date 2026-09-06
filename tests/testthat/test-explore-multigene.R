@@ -54,16 +54,11 @@ test_that("two-gene expression blend scales each normalized-expression axis", {
   gene_data$detected_2 <- FALSE
   observed <- prepare_umap_expression_blend_data(gene_data)
 
-  expect_equal(
-    observed$strength_1,
-    (observed$expression_1 - min(observed$expression_1)) /
-      diff(range(observed$expression_1))
-  )
-  expect_equal(
-    observed$strength_2,
-    (observed$expression_2 - min(observed$expression_2)) /
-      diff(range(observed$expression_2))
-  )
+  expect_equal(observed$strength_1, rep(0, nrow(observed)))
+  expect_equal(observed$strength_2, rep(0, nrow(observed)))
+  expect_true(all(
+    observed$blend_color == unname(blend_palette()[["Neither detected"]])
+  ))
   expect_true(all(grepl("^#[0-9A-F]{6}$", observed$blend_color)))
   expect_identical(
     observed$blend_color[observed$cell_id == "cell_4"],
@@ -83,7 +78,7 @@ test_that("two-gene expression blend scales each normalized-expression axis", {
   )) {
     expect_match(legend, label, fixed = TRUE)
   }
-  expect_no_match(legend, "detected", fixed = TRUE)
+  expect_match(legend, "detected", fixed = TRUE)
   expect_match(legend, 'role="list"', fixed = TRUE)
 })
 
@@ -131,7 +126,8 @@ test_that("interactive and download UMAPs separate expression and detection blen
   ))
   cell_traces <- Filter(
     function(trace) {
-      identical(trace$type, "scattergl") && length(trace$key %||% character()) > 0L
+      identical(trace$type, "scattergl") &&
+        length(trace$key %||% character()) > 0L
     },
     interactive$x$data
   )
@@ -157,7 +153,7 @@ test_that("interactive and download UMAPs separate expression and detection blen
   built <- ggplot2::ggplot_build(download)
   expect_equal(nrow(built$data[[1L]]), nrow(bundle$cells))
   expect_match(download$labels$caption, "low both", fixed = TRUE)
-  expect_no_match(download$labels$caption, "detected", fixed = TRUE)
+  expect_match(download$labels$caption, "detected", fixed = TRUE)
 
   detection <- plotly::plotly_build(make_umap_plotly(
     bundle = bundle,
@@ -168,7 +164,8 @@ test_that("interactive and download UMAPs separate expression and detection blen
   ))
   detection_trace <- Filter(
     function(trace) {
-      identical(trace$type, "scattergl") && length(trace$key %||% character()) > 0L
+      identical(trace$type, "scattergl") &&
+        length(trace$key %||% character()) > 0L
     },
     detection$x$data
   )[[1L]]
@@ -220,7 +217,7 @@ test_that("cell-level violins retain PFlog values and selected-cell overlays", {
   expect_s3_class(plot, "ggplot")
   built <- ggplot2::ggplot_build(plot)
   expect_true(any(vapply(built$data, nrow, integer(1L)) == 4L))
-  expect_match(plot$labels$y, "Log normalized expression", fixed = TRUE)
+  expect_match(plot$labels$y, "log normalized expression", fixed = TRUE)
   expect_match(plot$labels$caption, "raw counts", fixed = TRUE)
 })
 
@@ -244,9 +241,12 @@ test_that("two-gene PFlog scatter excludes double-negative cells", {
     function(trace) identical(trace$type, "scattergl"),
     built$x$data
   )
-  keys <- unlist(lapply(traces, function(trace) {
-    as.character(trace$key %||% character())
-  }), use.names = FALSE)
+  keys <- unlist(
+    lapply(traces, function(trace) {
+      as.character(trace$key %||% character())
+    }),
+    use.names = FALSE
+  )
   scope <- gene_pair_scope(gene_data)
   expect_equal(scope$included_n, 5L)
   expect_equal(scope$excluded_n, 1L)
@@ -266,24 +266,28 @@ test_that("two-gene PFlog scatter excludes double-negative cells", {
     grepl("Explicitly selected", trace$text, fixed = TRUE)
   }))))
 
-  cell_6_trace <- traces[vapply(traces, function(trace) {
-    "cell_6" %in% as.character(trace$key %||% character())
-  }, logical(1L))][[1L]]
+  cell_6_trace <- traces[vapply(
+    traces,
+    function(trace) {
+      "cell_6" %in% as.character(trace$key %||% character())
+    },
+    logical(1L)
+  )][[1L]]
   cell_6_index <- match("cell_6", as.character(cell_6_trace$key))
   expect_lt(as.numeric(cell_6_trace$y[[cell_6_index]]), 0)
   expect_match(
     built$x$layout$xaxis$title$text,
-    "Glul log normalized expression",
+    "Glul<br>log normalized expression",
     fixed = TRUE
   )
   expect_match(
     built$x$layout$yaxis$title$text,
-    "EGFP log normalized expression",
+    "EGFP<br>log normalized expression",
     fixed = TRUE
   )
   scope_html <- htmltools::renderTags(gene_pair_scope_ui(scope))$html
   expect_match(scope_html, "Showing 5 of 6 cells", fixed = TRUE)
-  expect_match(scope_html, "artificial diagonal", fixed = TRUE)
+  expect_match(scope_html, "double-negative", fixed = TRUE)
 
   cluster_scope <- gene_pair_scope(gene_data, group = "1")
   cluster_scope_html <- htmltools::renderTags(
@@ -390,17 +394,29 @@ test_that("gene-pair display switches between scatter and density traces", {
     character(1L)
   )
 
-  expect_true(any(vapply(scatter$x$data, function(trace) {
-    identical(trace$type, "scattergl")
-  }, logical(1L))))
+  expect_true(any(vapply(
+    scatter$x$data,
+    function(trace) {
+      identical(trace$type, "scattergl")
+    },
+    logical(1L)
+  )))
   expect_true(any(grepl("Loess trend", scatter_names, fixed = TRUE)))
   expect_true(any(grepl("95% confidence ribbon", scatter_names, fixed = TRUE)))
-  expect_false(any(vapply(density$x$data, function(trace) {
-    identical(trace$type, "scattergl")
-  }, logical(1L))))
-  expect_true(any(vapply(density$x$data, function(trace) {
-    identical(trace$type, "contour")
-  }, logical(1L))))
+  expect_false(any(vapply(
+    density$x$data,
+    function(trace) {
+      identical(trace$type, "scattergl")
+    },
+    logical(1L)
+  )))
+  expect_true(any(vapply(
+    density$x$data,
+    function(trace) {
+      identical(trace$type, "contour")
+    },
+    logical(1L)
+  )))
   expect_s3_class(
     make_gene_pair_plotly(
       gene_data,
@@ -468,7 +484,10 @@ test_that("selection snapshot is compact and uses raw-count detection", {
   expect_match(html, "detected by raw count", fixed = TRUE)
   expect_match(html, 'aria-live="polite"', fixed = TRUE)
 
-  all_cells <- prepare_selection_snapshot(prepare_plot_gene_data(bundle, "Glul"))
+  all_cells <- prepare_selection_snapshot(prepare_plot_gene_data(
+    bundle,
+    "Glul"
+  ))
   expect_false(all_cells$explicit_selection)
   expect_equal(all_cells$selected_n, nrow(bundle$cells))
   expect_equal(all_cells$genes$detected_n, 3L)
@@ -505,10 +524,10 @@ test_that("comparison table keeps only interpretable columns with plain headers"
       "Gene",
       "Selected mean log normalized expression",
       "Selected detected (%)",
-      "Other cells mean log normalized expression",
-      "Other cells detected (%)",
-      "Mean difference",
-      "Detection difference (pp)"
+      "Remaining cells mean log normalized expression",
+      "Remaining cells detected (%)",
+      "Selected − remaining mean",
+      "Detection difference (percentage points)"
     )
   )
 
@@ -516,7 +535,10 @@ test_that("comparison table keeps only interpretable columns with plain headers"
     summarize_selection(bundle, character(), "Glul")$comparison,
     explicit_selection = FALSE
   )
-  expect_identical(names(all_cells), c("gene", "mean_expression", "detected_pct"))
+  expect_identical(
+    names(all_cells),
+    c("gene", "mean_expression", "detected_pct")
+  )
   expect_identical(
     names(summary_datatable(all_cells)$x$data),
     c("Gene", "Mean log normalized expression", "Detected (%)")
@@ -529,11 +551,11 @@ test_that("Explore exposes a compact two-gene cell-level workflow", {
   )$html
 
   for (label in c(
-    "Second plot gene (optional)",
-    "Current gene is always the first plot gene",
-    "Selected-cell summary",
+    "Second gene (optional)",
+    "explore_test-active_set_scope",
+    "Cell map",
     "Cell-level",
-    "Log normalized expression distribution by final cluster",
+    "log normalized expression distribution by final cluster",
     "Two-gene log normalized expression"
   )) {
     expect_match(html, label, fixed = TRUE)
@@ -553,7 +575,7 @@ test_that("Explore exposes a compact two-gene cell-level workflow", {
   for (label in c("Display", "Scatter plot", "Density plot", "Loess trend")) {
     expect_match(html, label, fixed = TRUE)
   }
-  expect_match(html, 'class="umap-side-rail"', fixed = TRUE)
+  expect_match(html, 'class="selection-summary"', fixed = TRUE)
 })
 
 test_that("optional second plot gene does not mutate global gene state", {

@@ -38,9 +38,14 @@ about_ui <- function(id) {
     class = "about-shell",
     htmltools::tags$section(
       class = "about-hero",
-      htmltools::p("About the study", class = "eyebrow"),
-      htmltools::h1(
+      htmltools::h1("About the study"),
+      htmltools::h2(
+        class = "manuscript-title",
         "Electrical stimulation combined with p27Kip1 inactivation drives proliferative neurogenic reprogramming of Müller glia in the adult mouse retina"
+      ),
+      htmltools::p(
+        "Megan L. Stone · Carl Stone · Joel Jovanovic · Edward M. Levine",
+        class = "manuscript-authors"
       ),
       htmltools::p(
         "ESPIviz is an interactive companion to the study's single-cell RNA-seq analysis.",
@@ -52,11 +57,15 @@ about_ui <- function(id) {
       )
     ),
     bslib::layout_columns(
-      col_widths = c(7, 5, 12),
+      col_widths = c(7, 5),
       bslib::card(
         bslib::card_header("Study"),
         htmltools::p(
-          "The experiment compares p27CKO retinal cells with p27CKO cells collected after electrical stimulation. The final explorer contains 3,456 cells across eight clusters."
+          "Comparisons are p27CKO + E-Stim vs p27CKO: p27 inactivation with electrical stimulation versus p27 inactivation alone.",
+          class = "condition-key"
+        ),
+        htmltools::p(
+          "The study examines Müller glia in the adult mouse retina after p27 inactivation (p27CKO), with and without electrical stimulation (E-Stim). The final explorer contains 3,456 cells across eight clusters and six biological samples."
         ),
         htmltools::p(
           paste(
@@ -72,66 +81,8 @@ about_ui <- function(id) {
         shiny::uiOutput(ns("data_links")),
         shiny::downloadButton(
           ns("download_bundle"),
-          "Download processed app bundle",
+          "Processed app bundle (RDS)",
           class = "btn-primary"
-        )
-      ),
-      bslib::card(
-        class = "span-12 methods-card",
-        bslib::card_header("Methods"),
-        htmltools::div(
-          class = "methods-grid",
-          htmltools::div(
-            htmltools::h2("Expression"),
-            htmltools::p(
-              paste(
-                "Expression uses scclrR PFlog with target = 'auto':",
-                "log1p(4 × alpha × count) is centered by the mean shifted",
-                "log count across all genes in each cell. Values can be",
-                "negative after centering; detection remains count > 0.",
-                "For a two-gene expression UMAP, each gene is independently",
-                "scaled across cells before its two colors are blended.",
-                "The separate detection view uses raw counts to distinguish",
-                "neither, either, or both genes detected."
-              )
-            )
-          ),
-          htmltools::div(
-            htmltools::h2("Cell map"),
-            htmltools::p(
-              paste(
-                "The UMAP coordinates and numeric cluster assignments come",
-                "from the frozen final MG-selected analysis object. The map",
-                "is used as a qualitative projection, not a quantitative",
-                "measure of global distance, area, or density."
-              )
-            )
-          ),
-          htmltools::div(
-            htmltools::h2("Condition model"),
-            htmltools::p(
-              paste(
-                "The differential-expression view contains all 24,601 genes",
-                "from the primary six-sample Mouse × Condition pseudobulk",
-                "model with design ~ condition. MA and volcano views use the",
-                "reported shrunken log2 fold changes."
-              )
-            )
-          ),
-          htmltools::div(
-            htmltools::h2("Cell selections"),
-            htmltools::p(
-              paste(
-                "Selection summaries report expression and detection for",
-                "selected cells and all remaining cells. Sample summaries",
-                "preserve biological replicates, and cluster composition is",
-                "descriptive only. Log normalized expression comparisons use",
-                "differences rather",
-                "than ratios; detection ratios are blank when the denominator",
-                "is zero."
-              )
-            )
-          )
         )
       )
     )
@@ -205,14 +156,31 @@ data_links_ui <- function(bundle) {
       )
     }
   }
-  if (length(links) == 0L) {
+  htmltools::div(
+    class = "provenance-block",
+    htmltools::span(
+      class = "data-version",
+      paste("Data version", bundle$data_version)
+    ),
+    htmltools::tags$ul(class = "data-link-list", links),
     htmltools::p(
-      "Public manuscript and repository records will appear here when available.",
-      class = "supporting-copy"
+      if (is.na(doi)) {
+        "Manuscript DOI: not yet provided. Cite the study title, Carl Stone's ESPIviz application, and the data version used; a formal manuscript citation will be added when available."
+      } else {
+        "Use the linked manuscript citation and report the ESPIviz data version used."
+      }
+    ),
+    htmltools::p(
+      if (is.na(data_url)) {
+        "Final data deposit and accession: pending. The processed app bundle is available from the versioned public release."
+      } else {
+        "The final data record is linked above."
+      }
+    ),
+    htmltools::p(
+      "Reuse notice: final data-deposit terms are pending. This exploration bundle does not grant broader rights than the eventual repository license. Application code is separately MIT licensed."
     )
-  } else {
-    htmltools::tags$ul(class = "data-link-list", links)
-  }
+  )
 }
 
 about_server <- function(id, bundle) {

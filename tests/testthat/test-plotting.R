@@ -72,19 +72,15 @@ test_that("summary violin plots build for all four expression groupings", {
       function(layer) inherits(layer$geom, "GeomViolin"),
       logical(1L)
     )))
-    expect_identical(plot$labels$y, "Log normalized expression")
+    expect_identical(plot$labels$y, "log normalized expression")
     expect_silent(ggplot2::ggplot_build(plot))
   }
 })
 
-test_that("summary violins reuse configured condition and cluster colors", {
+test_that("summary violins identify groups and count each cell once across genes", {
   expect_app_helper("make_summary_violin_plot")
   bundle <- synthetic_bundle()
-  bundle$palette$cluster <- stats::setNames(
-    c("#A11D1D", "#1D6FA1", "#268A45"),
-    c("0", "1", "2")
-  )
-  data <- prepare_summary_violin_data(bundle, "Glul")
+  data <- prepare_summary_violin_data(bundle, c("Glul", "EGFP"))
 
   for (group_by in c("condition", "cluster")) {
     plot <- make_summary_violin_plot(
@@ -93,12 +89,24 @@ test_that("summary violins reuse configured condition and cluster colors", {
       group_by = group_by,
       group_label = group_by
     )
-    groups <- levels(summary_violin_plot_data(data, group_by)$group)
+    grouped <- summary_violin_plot_data(data, group_by)
+    groups <- levels(grouped$group)
     fill_scale <- plot$scales$get_scales("fill")
-
-    expect_equal(
-      unname(fill_scale$palette(length(groups))),
-      unname(discrete_palette(bundle, group_by, groups))
+    expect_identical(
+      unique(unname(fill_scale$palette(length(groups)))),
+      "#14764f"
+    )
+    labels <- plot$scales$get_scales("x")$labels
+    counts <- vapply(
+      groups,
+      function(group) {
+        length(unique(grouped$cell_id[grouped$group == group]))
+      },
+      integer(1L)
+    )
+    expect_identical(
+      unname(labels[groups]),
+      paste0(condition_label(groups), "  (n=", counts, ")")
     )
   }
 })
@@ -214,7 +222,7 @@ test_that("PFlog dot-plot color scales are symmetric around zero", {
   expect_equal(color_scale$limits, c(-limit, limit))
   expect_identical(
     plot$labels$colour,
-    "Mean log normalized expression"
+    "Mean log normalized\nexpression"
   )
 
   zero <- summarize_selection(bundle, selected, "ZeroGene")$comparison
@@ -247,7 +255,7 @@ test_that("interactive PFlog UMAP uses a zero-centered colorbar", {
     color_traces[[1L]]$marker$colorbar$title$text,
     "Glul log normalized expression"
   )
-  expect_identical(color_traces[[1L]]$marker$colorbar$title$side, "right")
+  expect_identical(color_traces[[1L]]$marker$colorbar$title$side, "top")
   expect_equal(color_traces[[1L]]$marker$cmin, -limit, tolerance = 1e-12)
   expect_equal(color_traces[[1L]]$marker$cmax, limit, tolerance = 1e-12)
   expect_equal(
@@ -311,7 +319,10 @@ test_that("gene-expression UMAP draws high-expressing cells last", {
 test_that("single-gene detection UMAP uses raw counts", {
   bundle <- synthetic_bundle()
   plotted <- umap_plot_data(bundle, "detection", "Glul")
-  observed <- stats::setNames(as.character(plotted$color_value), plotted$cell_id)
+  observed <- stats::setNames(
+    as.character(plotted$color_value),
+    plotted$cell_id
+  )
   expected <- ifelse(bundle$counts[, "Glul"] > 0, "Detected", "Not detected")
 
   expect_identical(

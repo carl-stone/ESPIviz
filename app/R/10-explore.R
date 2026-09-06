@@ -10,47 +10,63 @@ explore_ui <- function(id, bundle) {
     shiny::selectInput(
       ns(id),
       "Plot type",
-      choices = c("Violin plot" = "violin", "Dot plot" = "dot"),
-      selected = "violin",
-      width = "180px"
+      choices = c(
+        "Automatic" = "auto",
+        "Violin plot" = "violin",
+        "Dot plot" = "dot"
+      ),
+      selected = "auto",
+      width = "190px"
     )
   }
-  summary_plot_copy <- paste(
-    "Violin plots show cell-level log normalized expression distributions.",
-    "Choose Dot plot. Mean log normalized expression is shown by color and",
-    "detected-cell percentages by dot size."
-  )
+  summary_plot_note <- function(id) {
+    htmltools::tags$details(
+      class = "plot-help",
+      htmltools::tags$summary("How to read this figure"),
+      htmltools::p(
+        "Log normalized expression is centered and may be negative. Detection means raw count > 0. Dot color shows mean log normalized expression; dot area shows detection percentage. Zero detection has zero area; a cross means no cells. Shared color limits span all analysis genes and summary groups, including other pages."
+      ),
+      htmltools::p(
+        "Violin width shows density, scaled within each group. Boxes show median and interquartile range. Groups below 10 cells show individual points and a median; n counts cells. Automatic uses dot plots above six genes."
+      )
+    )
+  }
+  tool_menu <- function(label, ..., class = "") {
+    htmltools::tags$details(
+      class = paste("tool-menu", class),
+      htmltools::tags$summary(label),
+      htmltools::div(class = "tool-content", ...)
+    )
+  }
 
-  bslib::layout_sidebar(
-    fillable = FALSE,
-    fill = FALSE,
-    sidebar = bslib::sidebar(
-      width = 330,
-      title = "Explore expression",
+  htmltools::div(
+    class = "page-shell explore-shell",
+    htmltools::div(
+      class = "page-heading",
+      htmltools::h1("Explore"),
+      htmltools::p(
+        "Mouse retina · p27CKO (p27 inactivation), with and without electrical stimulation (E-Stim)",
+        class = "page-context"
+      )
+    ),
+    htmltools::div(
+      class = "explore-toolbar",
       shiny::selectizeInput(
         ns("active_gene"),
-        "Gene",
+        "Current gene",
         choices = NULL,
-        options = list(placeholder = "Search 38,394 genes")
+        options = list(placeholder = "Search genes")
       ),
       shiny::selectizeInput(
         ns("secondary_gene"),
-        "Second plot gene (optional)",
+        "Second gene (optional)",
         choices = NULL,
         selected = NULL,
         options = list(
-          placeholder = "Add a gene for blend and scatter",
+          placeholder = "Compare another gene",
           allowEmptyOption = TRUE,
           create = FALSE
         )
-      ),
-      htmltools::p(
-        paste(
-          "Current gene is always the first plot gene.",
-          "The optional second gene affects plots only; it does not change",
-          "the current gene or gene set."
-        ),
-        class = "sidebar-help"
       ),
       shiny::selectInput(
         ns("color_by"),
@@ -62,69 +78,195 @@ explore_ui <- function(id, bundle) {
           "Condition" = "condition"
         )
       ),
-      shiny::actionButton(
-        ns("clear_selection"),
-        "Clear selection",
-        class = "btn-outline-secondary w-100"
-      ),
-      htmltools::hr(),
-      htmltools::h3("Gene set", class = "sidebar-section-title"),
-      shiny::selectInput(
-        ns("preset"),
-        "Featured set",
-        choices = c(
-          "Choose a set" = "",
-          stats::setNames(preset_choices, preset_choices)
-        )
-      ),
-      shiny::actionButton(
-        ns("use_preset"),
-        "Use featured set",
-        class = "btn-outline-primary w-100"
-      ),
-      shiny::textAreaInput(
-        ns("gene_text"),
-        "Paste genes",
-        rows = 4,
-        placeholder = "One per line, or separated by spaces or commas"
-      ),
-      shiny::fileInput(
-        ns("gene_file"),
-        "Upload a gene list",
-        accept = c(".txt", ".csv", ".tsv"),
-        buttonLabel = "Choose file"
-      ),
-      bslib::layout_columns(
-        col_widths = c(6, 6),
-        shiny::actionButton(
-          ns("add_gene_text"),
-          "Add genes",
-          class = "btn-primary w-100"
+      shiny::uiOutput(ns("selection_overview"))
+    ),
+    htmltools::div(
+      class = "explore-actions",
+      tool_menu(
+        "Gene set",
+        shiny::selectInput(
+          ns("preset"),
+          "Featured set",
+          choices = c(
+            "Choose a set" = "",
+            stats::setNames(preset_choices, preset_choices)
+          )
         ),
         shiny::actionButton(
-          ns("add_active_gene"),
-          "Add current",
-          class = "btn-outline-primary w-100"
-        )
+          ns("use_preset"),
+          "Replace with featured set",
+          class = "btn-outline-primary"
+        ),
+        htmltools::hr(),
+        shiny::textAreaInput(
+          ns("gene_text"),
+          "Paste genes",
+          rows = 3,
+          placeholder = "One per line, or separated by spaces or commas"
+        ),
+        shiny::fileInput(
+          ns("gene_file"),
+          "Upload a gene list",
+          accept = c(".txt", ".csv", ".tsv"),
+          buttonLabel = "Choose file"
+        ),
+        htmltools::div(
+          class = "button-row",
+          shiny::actionButton(
+            ns("add_gene_text"),
+            "Add genes",
+            class = "btn-primary"
+          ),
+          shiny::actionButton(
+            ns("add_active_gene"),
+            "Add current gene",
+            class = "btn-outline-primary"
+          )
+        ),
+        shiny::uiOutput(ns("gene_input_status")),
+        shiny::uiOutput(ns("gene_set_status")),
+        htmltools::p(
+          "Choose rows in the Gene set tab to remove individual genes.",
+          class = "supporting-copy"
+        ),
+        shiny::conditionalPanel(
+          condition = "output.saved_gene_count > 0",
+          ns = ns,
+          htmltools::div(
+            class = "button-row",
+            shiny::actionButton(
+              ns("remove_genes"),
+              "Remove selected genes",
+              class = "btn-outline-secondary"
+            ),
+            shiny::actionButton(
+              ns("clear_gene_set"),
+              "Clear set",
+              class = "btn-outline-secondary"
+            )
+          )
+        ),
+        class = "gene-set-menu"
       ),
-      shiny::uiOutput(ns("gene_input_status")),
-      shiny::uiOutput(ns("gene_set_status")),
-      bslib::layout_columns(
-        col_widths = c(6, 6),
-        shiny::actionButton(
-          ns("remove_genes"),
-          "Remove chosen",
-          class = "btn-outline-secondary w-100"
+      tool_menu(
+        "Select cells",
+        htmltools::p(
+          "Click a cell, drag a lasso, or choose a cluster. Use the plot toolbar to switch to box selection.",
+          class = "supporting-copy"
+        ),
+        shiny::selectizeInput(
+          ns("select_cell_ids"),
+          "Select individual cells",
+          choices = NULL,
+          multiple = TRUE,
+          options = list(placeholder = "Search public cell IDs")
         ),
         shiny::actionButton(
-          ns("clear_gene_set"),
-          "Clear set",
-          class = "btn-outline-secondary w-100"
+          ns("apply_cell_ids"),
+          "Apply cell selection",
+          class = "btn-outline-primary"
+        ),
+        shiny::selectInput(
+          ns("select_cluster"),
+          "Select cells by cluster",
+          choices = c(
+            "Choose cluster" = "",
+            stats::setNames(cluster_choices, paste("Cluster", cluster_choices))
+          )
+        ),
+        htmltools::div(
+          class = "button-row",
+          shiny::actionButton(
+            ns("select_cluster_cells"),
+            "Select cluster",
+            class = "btn-primary"
+          ),
+          shiny::actionButton(
+            ns("clear_selection"),
+            "Clear selection",
+            class = "btn-outline-secondary"
+          )
+        )
+      ),
+      shiny::uiOutput(ns("active_set_scope")),
+      tool_menu(
+        "Export",
+        shiny::uiOutput(ns("export_scope")),
+        htmltools::div(
+          class = "download-stack",
+          shiny::downloadButton(
+            ns("download_analysis_genes"),
+            "Analysis genes (TXT)"
+          ),
+          shiny::downloadButton(
+            ns("download_umap_png"),
+            "UMAP PNG",
+            class = "btn-outline-primary btn-sm"
+          ),
+          shiny::downloadButton(
+            ns("download_umap_pdf"),
+            "UMAP PDF",
+            class = "btn-outline-primary btn-sm"
+          ),
+          shiny::downloadButton(
+            ns("download_gene_set"),
+            "Saved gene set (TXT)",
+            class = "btn-outline-primary btn-sm"
+          ),
+          shiny::downloadButton(
+            ns("download_summary"),
+            "Selection summary (CSV)",
+            class = "btn-outline-primary btn-sm"
+          ),
+          shiny::downloadButton(
+            ns("download_expression"),
+            "Cell expression (RDS)",
+            class = "btn-outline-primary btn-sm"
+          ),
+          shiny::downloadButton(
+            ns("download_metadata"),
+            "Cell metadata (CSV)",
+            class = "btn-outline-primary btn-sm"
+          )
+        ),
+        htmltools::tags$details(
+          class = "plot-help",
+          htmltools::tags$summary("Use the expression RDS"),
+          htmltools::p(
+            "A genes × cells shifted sparse matrix and a separate per-cell centering vector. Reconstruct a small selection with:"
+          ),
+          htmltools::tags$pre(
+            "x <- readRDS('espiviz-selected-cell-expression.rds')\nPFlog <- sweep(as.matrix(x$normalized_expression$sparse), 2L, x$normalized_expression$center, '-')"
+          )
+        ),
+        shiny::downloadButton(
+          ns("download_view_metadata"),
+          "View metadata (JSON)"
+        ),
+        class = "export-menu"
+      ),
+      tool_menu(
+        "Save view",
+        htmltools::p(
+          "Links include genes, a whole-cluster selection, plot settings, result tab, and data version. Save a view file for arbitrary cell selections or long gene lists.",
+          class = "supporting-copy"
+        ),
+        shiny::uiOutput(ns("view_link_status")),
+        shiny::actionButton(
+          ns("copy_view"),
+          "Copy view link",
+          class = "btn-primary"
+        ),
+        shiny::downloadButton(ns("download_view"), "Save view (JSON)"),
+        shiny::fileInput(
+          ns("restore_view"),
+          "Restore a saved view",
+          accept = ".json"
         )
       )
     ),
     bslib::layout_columns(
-      col_widths = c(8, 4, 12),
+      col_widths = c(6, 6),
       fillable = FALSE,
       fill = FALSE,
       class = "explore-grid",
@@ -132,122 +274,88 @@ explore_ui <- function(id, bundle) {
         class = "main-figure-card",
         full_screen = TRUE,
         bslib::card_header(
-          htmltools::div(
-            htmltools::span("UMAP", class = "card-kicker"),
-            shiny::uiOutput(ns("umap_title"), inline = TRUE)
-          )
+          htmltools::span("Cell map", class = "figure-heading"),
+          shiny::uiOutput(ns("umap_title"), inline = TRUE)
         ),
         htmltools::div(
           role = "region",
           `aria-label` = "Interactive UMAP",
           `aria-describedby` = ns("umap_note"),
-          plotly::plotlyOutput(ns("umap"), height = "650px")
+          plotly::plotlyOutput(ns("umap"), height = "460px")
         ),
         htmltools::p(
           id = ns("umap_note"),
           class = "figure-note",
-          paste(
-            "UMAP is a qualitative two-dimensional projection.",
-            "Use local neighborhoods for exploration; do not interpret",
-            "global distance, cluster area, or point density quantitatively."
-          )
-        )
-      ),
-      htmltools::div(
-        class = "umap-side-rail",
-        bslib::card(
-          class = "selection-card selection-card-compact",
-          bslib::card_header("Current selection"),
-          shiny::uiOutput(ns("selection_overview")),
-          htmltools::div(
-            class = "selection-instruction",
-            "Click a cell or use box or lasso on the UMAP."
-          ),
-          htmltools::h3(
-            "Select cells by cluster",
-            class = "card-section-title"
-          ),
-          shiny::selectInput(
-            ns("select_cluster"),
-            label = NULL,
-            choices = c(
-              "Choose cluster" = "",
-              stats::setNames(
-                cluster_choices,
-                paste("Cluster", cluster_choices)
-              )
-            )
-          ),
-          shiny::actionButton(
-            ns("select_cluster_cells"),
-            "Select cluster",
-            class = "btn-primary w-100"
-          )
+          "UMAP is a qualitative projection. Explore local neighborhoods; global distance, cluster area, and point density are not quantitative."
         ),
-        bslib::card(
-          class = "selection-summary-card",
-          bslib::card_header("Selected-cell summary"),
+        htmltools::div(
+          class = "selection-summary",
           shiny::uiOutput(ns("selection_snapshot")),
           shiny::uiOutput(ns("umap_legend"))
-        ),
-        bslib::card(
-          class = "selection-download-card",
-          bslib::card_header("Downloads"),
-          htmltools::div(
-            class = "download-stack compact-downloads",
-            shiny::downloadButton(
-              ns("download_umap_png"),
-              "UMAP PNG",
-              class = "btn-outline-primary btn-sm"
-            ),
-            shiny::downloadButton(
-              ns("download_umap_pdf"),
-              "UMAP PDF",
-              class = "btn-outline-primary btn-sm"
-            ),
-            shiny::downloadButton(
-              ns("download_gene_set"),
-              "Gene set",
-              class = "btn-outline-primary btn-sm"
-            ),
-            shiny::downloadButton(
-              ns("download_summary"),
-              "Selection summary",
-              class = "btn-outline-primary btn-sm"
-            ),
-            shiny::downloadButton(
-              ns("download_expression"),
-              "Cell expression",
-              class = "btn-outline-primary btn-sm"
-            ),
-            shiny::downloadButton(
-              ns("download_metadata"),
-              "Cell metadata",
-              class = "btn-outline-primary btn-sm"
-            )
-          )
         )
       ),
       bslib::card(
         class = "results-card",
+        full_screen = TRUE,
         htmltools::div(
           class = "result-toolbar result-page-toolbar",
           htmltools::div(
-            htmltools::h3("Expression summaries", class = "result-title"),
+            htmltools::h3("Expression", class = "result-title"),
             shiny::uiOutput(ns("gene_page_status"), inline = TRUE)
           ),
-          shiny::numericInput(
-            ns("gene_page"),
-            "Page",
-            value = 1L,
-            min = 1L,
-            step = 1L,
-            width = "110px"
+          shiny::conditionalPanel(
+            condition = "output.gene_page_count > 1",
+            ns = ns,
+            htmltools::div(
+              class = "gene-pager",
+              shiny::actionButton(ns("previous_gene_page"), "Previous"),
+              shiny::numericInput(
+                ns("gene_page"),
+                "Gene page",
+                value = 1L,
+                min = 1L,
+                step = 1L,
+                width = "90px"
+              ),
+              shiny::actionButton(ns("next_gene_page"), "Next")
+            )
           )
         ),
-        bslib::navset_card_tab(
+        shiny::uiOutput(ns("result_scope")),
+        shiny::conditionalPanel(
+          condition = "output.summary_is_dot === 'true'",
+          ns = ns,
+          shiny::selectInput(
+            ns("color_scale"),
+            "Dot color scale",
+            c(
+              "Automatic per figure" = "auto",
+              "Shared across analysis genes" = "shared"
+            ),
+            width = "270px"
+          )
+        ),
+        bslib::navset_tab(
           id = ns("explore_results"),
           selected = "By cluster",
+          bslib::nav_panel(
+            "By cluster",
+            htmltools::div(
+              class = "result-toolbar",
+              htmltools::h3(
+                "Expression by final cluster",
+                class = "result-title"
+              ),
+              summary_plot_type_input("cluster_plot_type")
+            ),
+            shiny::uiOutput(ns("cluster_summary_plot_ui")),
+            summary_plot_note("cluster_plot_type"),
+            htmltools::tags$details(
+              class = "data-disclosure",
+              htmltools::tags$summary("View data table"),
+              DT::DTOutput(ns("cluster_table"))
+            )
+          ),
           bslib::nav_panel(
             "Comparison",
             htmltools::div(
@@ -255,26 +363,27 @@ explore_ui <- function(id, bundle) {
               shiny::uiOutput(ns("comparison_heading")),
               summary_plot_type_input("comparison_plot_type")
             ),
-            htmltools::p(
-              summary_plot_copy,
-              class = "supporting-copy"
-            ),
             htmltools::div(
               class = "comparison-plot-shell",
               shiny::uiOutput(ns("gene_comparison_plot_ui"))
             ),
-            DT::DTOutput(ns("comparison_table"))
+            summary_plot_note("comparison_plot_type"),
+            htmltools::tags$details(
+              class = "data-disclosure",
+              htmltools::tags$summary("View data table"),
+              DT::DTOutput(ns("comparison_table"))
+            )
           ),
           bslib::nav_panel(
             "Cell-level",
             htmltools::h3(
-              "Log normalized expression distribution by final cluster",
+              "log normalized expression distribution by final cluster",
               class = "result-title"
             ),
             htmltools::p(
               paste(
                 "Violins show the current gene and optional second plot gene",
-                "across final clusters. Log normalized expression is centered",
+                "across final clusters. log normalized expression is centered",
                 "and can be negative;",
                 "outlined points mark explicitly selected cells."
               ),
@@ -304,7 +413,7 @@ explore_ui <- function(id, bundle) {
                 shiny::selectInput(
                   ns("gene_pair_loess_group"),
                   "Loess trend",
-                  choices = gene_pair_group_choices,
+                  choices = c("No trend" = "none", gene_pair_group_choices),
                   selected = "all",
                   width = "220px"
                 )
@@ -328,7 +437,7 @@ explore_ui <- function(id, bundle) {
                 paste(
                   "Each point is a cell detected by raw count for at least one gene;",
                   "color identifies its final cluster.",
-                  "Larger outlined diamonds are explicitly selected cells."
+                  "Larger outlined diamonds are explicitly selected cells. LOESS and its 95% confidence interval describe cells; the interval does not estimate uncertainty among biological replicates."
                 ),
                 class = "supporting-copy"
               )
@@ -338,7 +447,7 @@ explore_ui <- function(id, bundle) {
               ns = ns,
               htmltools::p(
                 paste(
-                  "Filled contours show cell density for cells detected by raw",
+                  "Filled contours show a smoothed probability density, normalized for the chosen group, for cells detected by raw",
                   "count for at least one gene."
                 ),
                 class = "supporting-copy"
@@ -356,19 +465,20 @@ explore_ui <- function(id, bundle) {
               ),
               summary_plot_type_input("sample_plot_type")
             ),
+            shiny::uiOutput(ns("sample_summary_plot_ui")),
             htmltools::p(
-              paste(
-                "Samples are the biological replicates and are ordered by",
-                "condition.",
-                summary_plot_copy
-              ),
+              "Samples are the biological replicates, ordered by condition.",
               class = "supporting-copy"
             ),
-            shiny::uiOutput(ns("sample_summary_plot_ui")),
-            DT::DTOutput(ns("sample_table")),
+            summary_plot_note("sample_plot_type"),
+            htmltools::tags$details(
+              class = "data-disclosure",
+              htmltools::tags$summary("View data table"),
+              DT::DTOutput(ns("sample_table"))
+            ),
             htmltools::hr(class = "result-divider"),
             htmltools::h3(
-              "Observed cluster composition",
+              "Observed cluster composition — all cells",
               class = "result-title"
             ),
             htmltools::p(
@@ -380,7 +490,11 @@ explore_ui <- function(id, bundle) {
               class = "supporting-copy"
             ),
             shiny::plotOutput(ns("composition_plot"), height = "520px"),
-            DT::DTOutput(ns("composition_table"))
+            htmltools::tags$details(
+              class = "data-disclosure",
+              htmltools::tags$summary("View data table"),
+              DT::DTOutput(ns("composition_table"))
+            )
           ),
           bslib::nav_panel(
             "Pooled condition",
@@ -395,30 +509,17 @@ explore_ui <- function(id, bundle) {
             htmltools::p(
               paste(
                 "This descriptive view pools cells within each condition.",
-                "Use the sample view above to inspect replicate consistency.",
-                summary_plot_copy
+                "Use By sample to inspect replicate consistency."
               ),
               class = "supporting-copy"
             ),
             shiny::uiOutput(ns("condition_summary_plot_ui")),
-            DT::DTOutput(ns("condition_table"))
-          ),
-          bslib::nav_panel(
-            "By cluster",
-            htmltools::div(
-              class = "result-toolbar",
-              htmltools::h3(
-                "Expression by final cluster",
-                class = "result-title"
-              ),
-              summary_plot_type_input("cluster_plot_type")
-            ),
-            htmltools::p(
-              summary_plot_copy,
-              class = "supporting-copy"
-            ),
-            shiny::uiOutput(ns("cluster_summary_plot_ui")),
-            DT::DTOutput(ns("cluster_table"))
+            summary_plot_note("condition_plot_type"),
+            htmltools::tags$details(
+              class = "data-disclosure",
+              htmltools::tags$summary("View data table"),
+              DT::DTOutput(ns("condition_table"))
+            )
           ),
           bslib::nav_panel(
             "Cluster markers",
@@ -445,6 +546,10 @@ explore_ui <- function(id, bundle) {
               "Select a marker row below to make that gene current across the app.",
               class = "supporting-copy"
             ),
+            htmltools::p(
+              "Marker statistics compare the chosen cluster with all remaining cells in the final analysis, independent of the current selection. Detection columns are percentages (source fractions multiplied by 100).",
+              class = "supporting-copy"
+            ),
             DT::DTOutput(ns("marker_table"))
           ),
           bslib::nav_panel(
@@ -453,7 +558,31 @@ explore_ui <- function(id, bundle) {
               "The complete set stays active across pages and downloads.",
               class = "supporting-copy"
             ),
+            shiny::uiOutput(ns("empty_gene_set")),
             DT::DTOutput(ns("gene_set_table"))
+          )
+        ),
+        htmltools::tags$details(
+          class = "result-downloads data-disclosure",
+          htmltools::tags$summary("Download this result"),
+          shiny::selectInput(
+            ns("export_result"),
+            "Result",
+            c("Expression by cluster" = "cluster")
+          ),
+          shiny::uiOutput(ns("result_export_scope")),
+          htmltools::div(
+            class = "button-row",
+            shiny::conditionalPanel(
+              condition = "output.can_export_result_figure === 'true'",
+              ns = ns,
+              shiny::downloadButton(ns("download_result_png"), "Figure (PNG)"),
+              shiny::downloadButton(ns("download_result_pdf"), "Figure (PDF)")
+            ),
+            shiny::downloadButton(
+              ns("download_result_data"),
+              "Underlying data (CSV)"
+            )
           )
         )
       )
@@ -462,6 +591,10 @@ explore_ui <- function(id, bundle) {
 }
 
 summary_datatable <- function(data, page_length = 25L) {
+  data <- label_result_conditions(data)
+  if ("sample" %in% names(data)) {
+    data$sample <- sample_label(data$sample)
+  }
   labels <- c(
     gene = "Gene",
     condition = "Condition",
@@ -475,12 +608,12 @@ summary_datatable <- function(data, page_length = 25L) {
     selected_median = "Selected median log normalized expression",
     selected_detected_n = "Selected detected cells",
     selected_detected_pct = "Selected detected (%)",
-    remaining_mean = "Other cells mean log normalized expression",
+    remaining_mean = "Remaining cells mean log normalized expression",
     remaining_median = "Remaining median log normalized expression",
     remaining_detected_n = "Remaining detected cells",
-    remaining_detected_pct = "Other cells detected (%)",
-    mean_difference = "Mean difference",
-    detection_pp_difference = "Detection difference (pp)",
+    remaining_detected_pct = "Remaining cells detected (%)",
+    mean_difference = "Selected − remaining mean",
+    detection_pp_difference = "Detection difference (percentage points)",
     detection_ratio = "Detection ratio",
     mean_expression = "Mean log normalized expression",
     median_expression = "Median log normalized expression",
@@ -535,8 +668,284 @@ explore_server <- function(id, bundle, state) {
     source_id <- ns("umap_source")
     pair_source_id <- ns("gene_pair_source")
     input_message <- shiny::reactiveVal(NULL)
-    analysis_genes <- state_analysis_genes(state)
+    analysis_genes <- shiny::reactive(expression_summary_genes())
     composition_data <- prepare_cluster_composition(bundle)
+    current_summary_type <- shiny::reactive({
+      key <- switch(
+        input$explore_results %||% "By cluster",
+        "Comparison" = "comparison",
+        "By sample" = "sample",
+        "Pooled condition" = "condition",
+        "cluster"
+      )
+      resolved_plot_type(
+        input[[paste0(key, "_plot_type")]] %||% "auto",
+        length(expression_summary_genes())
+      )
+    })
+    full_scope_summary <- shiny::reactive(summarize_selection(
+      bundle,
+      state$selected_cells(),
+      expression_summary_genes()
+    ))
+    shared_color_limit <- shiny::reactive({
+      if (!identical(input$color_scale, "shared")) {
+        return(NULL)
+      }
+      data <- full_scope_summary()
+      expression_color_limit(c(
+        data$comparison$selected_mean,
+        data$comparison$remaining_mean,
+        data$selected_by_cluster$mean_expression,
+        data$selected_by_sample$mean_expression,
+        data$selected_by_condition$mean_expression
+      ))
+    })
+    output$summary_is_dot <- shiny::renderText(
+      if (
+        result_uses_gene_page(input$explore_results %||% "By cluster") &&
+          current_summary_type() == "dot"
+      ) {
+        "true"
+      } else {
+        "false"
+      }
+    )
+    shiny::outputOptions(output, "summary_is_dot", suspendWhenHidden = FALSE)
+    output$saved_gene_count <- shiny::renderText(length(state$gene_set()))
+    shiny::outputOptions(output, "saved_gene_count", suspendWhenHidden = FALSE)
+    output$active_set_scope <- shiny::renderUI({
+      n <- length(state$gene_set())
+      extra <- setdiff(plot_genes(), state$gene_set())
+      htmltools::div(
+        class = "active-set-scope",
+        role = "status",
+        htmltools::strong(
+          if (n) {
+            paste(
+              count_label(n, "saved gene"),
+              state$gene_set_name() %||% "",
+              sep = " · "
+            )
+          } else {
+            "Current gene workspace"
+          }
+        ),
+        htmltools::span(
+          if (n) {
+            paste(
+              count_label(length(extra), "additional gene"),
+              "from the current pair"
+            )
+          } else {
+            "Summaries include the current gene and optional second gene."
+          }
+        )
+      )
+    })
+    output$result_scope <- shiny::renderUI({
+      tab <- input$explore_results %||% "By cluster"
+      context <- tab %in% c("Cell-level", "Cluster markers")
+      htmltools::p(
+        class = "result-scope",
+        role = "status",
+        if (tab == "Gene set") {
+          "Saved gene set · complete list"
+        } else {
+          selection_description(bundle, state$selected_cells(), context)
+        },
+        if (tab == "By sample") {
+          " · Composition below always shows all cells."
+        } else if (tab == "Comparison" && length(state$selected_cells())) {
+          " · Compared with all remaining cells."
+        } else if (context) {
+          " · Independent of gene pagination."
+        } else {
+          ""
+        }
+      )
+    })
+    output$empty_gene_set <- shiny::renderUI({
+      if (!length(state$gene_set())) {
+        htmltools::div(
+          class = "empty-state",
+          htmltools::h3("Build a gene set"),
+          htmltools::p(
+            "No gene set yet. Choose a featured set, paste gene symbols, or add the current gene in the Gene set menu."
+          )
+        )
+      }
+    })
+    shiny::observe({
+      session$sendCustomMessage(
+        "control-disabled",
+        list(
+          id = ns("remove_genes"),
+          disabled = !length(input$gene_set_table_rows_selected)
+        )
+      )
+      session$sendCustomMessage(
+        "control-disabled",
+        list(id = ns("download_gene_set"), disabled = !length(state$gene_set()))
+      )
+      session$sendCustomMessage(
+        "control-disabled",
+        list(id = ns("previous_gene_page"), disabled = page_info()$page <= 1L)
+      )
+      session$sendCustomMessage(
+        "control-disabled",
+        list(
+          id = ns("next_gene_page"),
+          disabled = page_info()$page >= page_info()$pages
+        )
+      )
+    })
+    shiny::observeEvent(
+      input$previous_gene_page,
+      shiny::updateNumericInput(
+        session,
+        "gene_page",
+        value = max(1L, page_info()$page - 1L)
+      )
+    )
+    shiny::observeEvent(
+      input$next_gene_page,
+      shiny::updateNumericInput(
+        session,
+        "gene_page",
+        value = min(page_info()$pages, page_info()$page + 1L)
+      )
+    )
+    shiny::updateSelectizeInput(
+      session,
+      "select_cell_ids",
+      choices = as.character(bundle$cells$cell_id),
+      server = TRUE
+    )
+    shiny::observeEvent(input$apply_cell_ids, {
+      state$selected_cells(intersect(
+        bundle$cells$cell_id,
+        input$select_cell_ids %||% character()
+      ))
+      show_selection_comparison()
+    })
+    shiny::observe({
+      defaults <- view_option_defaults()
+      values <- lapply(names(defaults), function(key) {
+        input[[key]] %||% defaults[[key]]
+      })
+      names(values) <- names(defaults)
+      if (!identical(shiny::isolate(state$view_options()), values)) {
+        state$view_options(values)
+      }
+    })
+    shiny::observeEvent(
+      state$restore(),
+      {
+        values <- state$restore()
+        for (key in setdiff(
+          names(values),
+          c("secondary_gene", "gene_page", "explore_results")
+        )) {
+          shiny::updateSelectInput(session, key, selected = values[[key]])
+        }
+        shiny::updateSelectizeInput(
+          session,
+          "secondary_gene",
+          choices = c(
+            "No second gene" = "",
+            stats::setNames(universe, universe)
+          ),
+          selected = values$secondary_gene,
+          server = TRUE
+        )
+        shiny::updateNumericInput(
+          session,
+          "gene_page",
+          value = values$gene_page
+        )
+        bslib::nav_select(
+          "explore_results",
+          values$explore_results,
+          session = session
+        )
+      },
+      ignoreNULL = TRUE
+    )
+    shiny::observeEvent(
+      state$requested_tab(),
+      {
+        bslib::nav_select(
+          "explore_results",
+          state$requested_tab(),
+          session = session
+        )
+        shiny::updateNumericInput(session, "gene_page", value = 1L)
+        state$requested_tab(NULL)
+      },
+      ignoreNULL = TRUE
+    )
+    saved_view <- shiny::reactive(capture_view_state(bundle, state))
+    link_query <- shiny::reactive(view_link_query(saved_view()))
+    output$view_link_status <- shiny::renderUI({
+      htmltools::p(
+        role = "status",
+        class = "supporting-copy",
+        if (is.null(link_query())) {
+          "This selection or gene list needs a saved view file. Save view (JSON) preserves it completely."
+        } else {
+          "Ready to copy a reproducible view link."
+        }
+      )
+    })
+    shiny::observe({
+      session$sendCustomMessage(
+        "control-disabled",
+        list(id = ns("copy_view"), disabled = is.null(link_query()))
+      )
+    })
+    shiny::observeEvent(input$copy_view, {
+      shiny::req(link_query())
+      session$sendCustomMessage(
+        "copy-view",
+        list(query = link_query(), statusId = ns("view_link_status"))
+      )
+    })
+    output$download_view <- shiny::downloadHandler(
+      filename = function() "espiviz-view.json",
+      content = function(file) {
+        jsonlite::write_json(
+          saved_view(),
+          file,
+          auto_unbox = TRUE,
+          pretty = TRUE,
+          null = "null",
+          na = "null"
+        )
+      }
+    )
+    shiny::observeEvent(input$restore_view, {
+      tryCatch(
+        {
+          if (input$restore_view$size > 2e6) {
+            stop("View files must be smaller than 2 MB.")
+          }
+          value <- jsonlite::read_json(
+            input$restore_view$datapath,
+            simplifyVector = TRUE
+          )
+          restore_view_state(value, bundle, state)
+          shiny::showNotification("Saved view restored.", type = "message")
+        },
+        error = function(error) {
+          shiny::showNotification(
+            conditionMessage(error),
+            type = "error",
+            duration = NULL
+          )
+        }
+      )
+    })
     show_selection_comparison <- function() {
       bslib::nav_select(
         "explore_results",
@@ -615,8 +1024,11 @@ explore_server <- function(id, bundle, state) {
     })
 
     expression_summary_genes <- shiny::reactive({
-      genes <- c(plot_genes(), state$gene_set())
-      genes[!duplicated(casefold_key(genes))]
+      analysis_gene_scope(
+        state$active_gene(),
+        setdiff(plot_genes(), state$active_gene()),
+        state$gene_set()
+      )
     })
 
     plot_gene_data <- shiny::reactive({
@@ -628,15 +1040,33 @@ explore_server <- function(id, bundle, state) {
     })
 
     add_text_genes <- function(text) {
+      before <- state$gene_set()
       parsed <- append_state_gene_set(state, bundle, text)
-      if (length(parsed$missing) > 0L) {
-        input_message(paste(
-          "Not found:",
-          paste(parsed$missing, collapse = ", ")
-        ))
-      } else {
-        input_message(NULL)
-      }
+      added <- length(setdiff(state$gene_set(), before))
+      present <- length(intersect(parsed$genes, before))
+      input_message(paste0(
+        "Added ",
+        count_label(added),
+        ". ",
+        present,
+        " already present.",
+        if (length(parsed$missing)) {
+          paste0(
+            " ",
+            length(parsed$missing),
+            if (length(parsed$missing) == 1L) {
+              " unrecognized symbol"
+            } else {
+              " unrecognized symbols"
+            },
+            ": ",
+            paste(parsed$missing, collapse = ", "),
+            "."
+          )
+        } else {
+          ""
+        }
+      ))
       parsed
     }
 
@@ -650,8 +1080,7 @@ explore_server <- function(id, bundle, state) {
     })
 
     shiny::observeEvent(input$add_active_gene, {
-      append_state_gene_set(state, bundle, state$active_gene())
-      input_message(NULL)
+      add_text_genes(state$active_gene())
     })
 
     shiny::observeEvent(input$use_preset, {
@@ -662,12 +1091,19 @@ explore_server <- function(id, bundle, state) {
           bundle,
           bundle$featured_gene_sets[[preset]]
         )
-        input_message(NULL)
+        state$gene_set_name(preset)
+        input_message(paste(
+          "Replaced gene set with",
+          preset,
+          "·",
+          count_label(length(state$gene_set()))
+        ))
       }
     })
 
     shiny::observeEvent(input$clear_gene_set, {
       state$gene_set(character())
+      state$gene_set_name(NULL)
       input_message(NULL)
     })
 
@@ -676,6 +1112,7 @@ explore_server <- function(id, bundle, state) {
       current <- state$gene_set()
       if (length(rows) > 0L && length(current) > 0L) {
         state$gene_set(current[-rows])
+        state$gene_set_name(NULL)
       }
     })
 
@@ -738,10 +1175,11 @@ explore_server <- function(id, bundle, state) {
 
     output$umap_legend <- shiny::renderUI({
       if (
-        !(input$color_by %||% "expression") %in% c(
-          "expression",
-          "detection"
-        ) ||
+        !(input$color_by %||% "expression") %in%
+          c(
+            "expression",
+            "detection"
+          ) ||
           length(plot_genes()) != 2L
       ) {
         return(NULL)
@@ -798,11 +1236,7 @@ explore_server <- function(id, bundle, state) {
     )
 
     selection_summary <- shiny::reactive({
-      visible_genes <- paginate_genes(
-        expression_summary_genes(),
-        input$gene_page %||% 1L,
-        25L
-      )$genes
+      visible_genes <- page_info()$genes
       summarize_selection(bundle, state$selected_cells(), visible_genes)
     })
 
@@ -823,7 +1257,7 @@ explore_server <- function(id, bundle, state) {
           if (explicit) {
             paste(format(remaining_n, big.mark = ","), "remaining")
           } else {
-            "No region selected"
+            "All cells — no selection applied"
           }
         )
       )
@@ -837,7 +1271,7 @@ explore_server <- function(id, bundle, state) {
       paginate_genes(
         expression_summary_genes(),
         input$gene_page %||% 1L,
-        25L
+        if (current_summary_type() == "dot") 25L else 6L
       )
     })
 
@@ -855,7 +1289,10 @@ explore_server <- function(id, bundle, state) {
     })
 
     is_dot_summary_plot <- function(plot_type) {
-      identical(plot_type %||% "violin", "dot")
+      identical(
+        resolved_plot_type(plot_type, length(expression_summary_genes())),
+        "dot"
+      )
     }
 
     summary_plot_height <- function(plot_type) {
@@ -900,8 +1337,7 @@ explore_server <- function(id, bundle, state) {
       if (is_dot_summary_plot(plot_type)) {
         return(paste(
           "Dot plot of log normalized expression for",
-          length(page_info()$genes),
-          "genes",
+          count_label(length(page_info()$genes)),
           scope,
           "Color shows mean log normalized expression; dot size shows the",
           "percentage of",
@@ -911,8 +1347,7 @@ explore_server <- function(id, bundle, state) {
       }
       paste(
         "Violin plots of cell-level log normalized expression for",
-        length(page_info()$genes),
-        "genes",
+        count_label(length(page_info()$genes)),
         scope
       )
     }
@@ -941,23 +1376,38 @@ explore_server <- function(id, bundle, state) {
       htmltools::h3(heading, class = "result-title")
     })
 
+    output$gene_page_count <- shiny::renderText(
+      if (result_uses_gene_page(input$explore_results %||% "By cluster")) {
+        page_info()$pages
+      } else {
+        0L
+      }
+    )
+    shiny::outputOptions(output, "gene_page_count", suspendWhenHidden = FALSE)
+
     output$gene_page_status <- shiny::renderUI({
       page <- page_info()
-      htmltools::span(
-        if (page$total == 0L) {
-          "No genes"
-        } else {
-          paste0(
-            "Genes ",
-            page$start,
-            "–",
-            page$end,
-            " of ",
-            format(page$total, big.mark = ",")
-          )
-        },
-        class = "supporting-copy"
-      )
+      tab <- input$explore_results %||% "By cluster"
+      text <- if (result_uses_gene_page(tab)) {
+        paste0(
+          "Gene page ",
+          page$page,
+          " of ",
+          page$pages,
+          " · Showing ",
+          length(page$genes),
+          " of ",
+          count_label(page$total, "analysis gene")
+        )
+      } else {
+        switch(
+          tab,
+          "Cell-level" = paste(plot_genes(), collapse = " + "),
+          "Cluster markers" = "Fixed cluster markers · all cells",
+          "Gene set" = count_label(length(state$gene_set()), "saved gene")
+        )
+      }
+      htmltools::span(text, class = "supporting-copy")
     })
 
     page_comparison <- shiny::reactive({
@@ -980,7 +1430,10 @@ explore_server <- function(id, bundle, state) {
       {
         plot <- make_explore_summary_plot(
           input$comparison_plot_type,
-          make_gene_comparison_plot(page_comparison()),
+          make_gene_comparison_plot(
+            page_comparison(),
+            color_limit = shared_color_limit()
+          ),
           group_by = "comparison",
           group_label = NULL
         )
@@ -1015,7 +1468,7 @@ explore_server <- function(id, bundle, state) {
       htmltools::div(
         role = "region",
         `aria-label` = paste(
-          "Log normalized expression distribution violin plot for",
+          "log normalized expression distribution violin plot for",
           paste(plot_genes(), collapse = " and "),
           "by final cluster"
         ),
@@ -1033,7 +1486,7 @@ explore_server <- function(id, bundle, state) {
         paste(
           "Violin plot of log normalized expression for",
           paste(plot_genes(), collapse = " and "),
-          "across final clusters. Log normalized expression is centered and",
+          "across final clusters. log normalized expression is centered and",
           "can be negative.",
           "Outlined points mark explicitly selected cells; detection is based",
           "on raw counts and is reported in the selected-cell summary."
@@ -1046,7 +1499,7 @@ explore_server <- function(id, bundle, state) {
         return(htmltools::div(
           class = "plot-empty",
           role = "status",
-          "Choose a second plot gene in the sidebar to show the two-gene plot."
+          "Choose a second gene above to show the two-gene plot."
         ))
       }
       gene_data <- plot_gene_data()
@@ -1132,7 +1585,8 @@ explore_server <- function(id, bundle, state) {
           make_group_summary_plot(
             condition_page_summary(),
             group_column = "condition",
-            group_label = "Condition"
+            group_label = "Condition",
+            color_limit = shared_color_limit()
           ),
           group_by = "condition",
           group_label = "Condition"
@@ -1162,7 +1616,8 @@ explore_server <- function(id, bundle, state) {
             sample_page_summary(),
             group_column = "sample",
             group_label = "Biological sample",
-            rotate_x = TRUE
+            rotate_x = TRUE,
+            color_limit = shared_color_limit()
           ),
           group_by = "sample",
           group_label = "Biological sample",
@@ -1213,7 +1668,8 @@ explore_server <- function(id, bundle, state) {
           make_group_summary_plot(
             cluster_page_summary(),
             group_column = "cluster",
-            group_label = "Final cluster"
+            group_label = "Final cluster",
+            color_limit = shared_color_limit()
           ),
           group_by = "cluster",
           group_label = "Final cluster"
@@ -1237,8 +1693,7 @@ explore_server <- function(id, bundle, state) {
     })
 
     output$composition_table <- DT::renderDT({
-      data <- composition_data[
-        ,
+      data <- composition_data[,
         c(
           "condition",
           "sample",
@@ -1258,12 +1713,18 @@ explore_server <- function(id, bundle, state) {
 
     output$gene_set_table <- DT::renderDT({
       genes <- state$gene_set()
-      data <- data.frame(gene = genes, stringsAsFactors = FALSE)
+      if (!length(genes)) {
+        return(NULL)
+      }
+      data <- data.frame(Gene = genes, stringsAsFactors = FALSE)
       DT::datatable(
         data,
         rownames = FALSE,
         selection = "multiple",
         class = "compact stripe",
+        callback = DT::JS(
+          "table.table().node().dataset.rowSelectable = 'true';"
+        ),
         options = list(pageLength = 25L, lengthChange = FALSE, dom = "tip")
       )
     })
@@ -1319,22 +1780,44 @@ explore_server <- function(id, bundle, state) {
     )
 
     output$marker_table <- DT::renderDT({
-      DT::datatable(
-        marker_data(),
+      scientific_datatable(
+        marker_table_data(marker_data()),
         rownames = FALSE,
         selection = "single",
-        class = "compact stripe",
         options = list(pageLength = 15L, lengthChange = FALSE, scrollX = TRUE)
       )
     })
 
-    shiny::observeEvent(input$marker_table_rows_selected, {
-      row <- input$marker_table_rows_selected %||% integer()
-      data <- marker_data()
-      if (length(row) > 0L && row[[1L]] <= nrow(data)) {
-        set_state_gene(state, bundle, data$gene[[row[[1L]]]])
-      }
-    }, ignoreInit = TRUE)
+    shiny::observeEvent(
+      input$marker_table_rows_selected,
+      {
+        row <- input$marker_table_rows_selected %||% integer()
+        data <- marker_data()
+        if (length(row) > 0L && row[[1L]] <= nrow(data)) {
+          set_state_gene(state, bundle, data$gene[[row[[1L]]]])
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    register_explore_exports(
+      input,
+      output,
+      session,
+      bundle,
+      state,
+      list(
+        genes = expression_summary_genes,
+        plot_genes = plot_genes,
+        gene_data = plot_gene_data,
+        page = page_info,
+        summary = selection_summary,
+        violin_data = page_violin_data,
+        marker_overview = marker_overview,
+        color_limit = shared_color_limit,
+        height = function() summary_plot_height(current_summary_type())
+      )
+    )
 
     output$download_umap_png <- shiny::downloadHandler(
       filename = function() {
@@ -1347,12 +1830,19 @@ explore_server <- function(id, bundle, state) {
       content = function(file) {
         ggplot2::ggsave(
           file,
-          plot = make_umap_ggplot(
+          plot = figure_context(
+            make_umap_ggplot(
+              bundle,
+              input$color_by %||% "expression",
+              plot_genes(),
+              state$selected_cells(),
+              gene_data = plot_gene_data()
+            ),
             bundle,
-            input$color_by %||% "expression",
+            "Final cell map",
             plot_genes(),
             state$selected_cells(),
-            gene_data = plot_gene_data()
+            context = TRUE
           ),
           width = 8.5,
           height = 7,
@@ -1373,12 +1863,19 @@ explore_server <- function(id, bundle, state) {
       content = function(file) {
         ggplot2::ggsave(
           file,
-          plot = make_umap_ggplot(
+          plot = figure_context(
+            make_umap_ggplot(
+              bundle,
+              input$color_by %||% "expression",
+              plot_genes(),
+              state$selected_cells(),
+              gene_data = plot_gene_data()
+            ),
             bundle,
-            input$color_by %||% "expression",
+            "Final cell map",
             plot_genes(),
             state$selected_cells(),
-            gene_data = plot_gene_data()
+            context = TRUE
           ),
           device = grDevices::cairo_pdf,
           width = 8.5,
@@ -1391,7 +1888,7 @@ explore_server <- function(id, bundle, state) {
     output$download_gene_set <- shiny::downloadHandler(
       filename = function() "espiviz-gene-set.txt",
       content = function(file) {
-        writeLines(analysis_genes(), file, useBytes = TRUE)
+        writeLines(state$gene_set(), file, useBytes = TRUE)
       }
     )
 
@@ -1431,7 +1928,12 @@ explore_server <- function(id, bundle, state) {
           selected <- bundle$cells$cell_id
         }
         data <- bundle$cells[bundle$cells$cell_id %in% selected, , drop = FALSE]
-        utils::write.csv(data, file, row.names = FALSE, na = "")
+        utils::write.csv(
+          label_result_conditions(data),
+          file,
+          row.names = FALSE,
+          na = ""
+        )
       }
     )
   })

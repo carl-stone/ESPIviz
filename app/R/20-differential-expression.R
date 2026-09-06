@@ -13,59 +13,34 @@ de_column <- function(data, candidates, required = TRUE) {
 }
 
 de_significance_levels <- function(view = c("ma", "volcano")) {
-  view <- match.arg(view)
-  levels <- c(
-    "Higher in Control",
-    "Not significant",
-    "Higher with E-Stim"
+  c(
+    "Higher in p27CKO",
+    "FDR > 0.05",
+    "Adjusted P unavailable",
+    "Higher in p27CKO + E-Stim"
   )
-  if (identical(view, "volcano")) {
-    levels <- append(levels, "Adjusted P unavailable", after = 2L)
-  }
-  levels
 }
 
 de_significance_palette <- function(view = c("ma", "volcano")) {
-  view <- match.arg(view)
-  palette <- c(
-    "Higher in Control" = "#3569a8",
-    "Not significant" = "#7f8b93",
-    "Higher with E-Stim" = "#b64b35"
+  c(
+    "Higher in p27CKO" = "#2865a0",
+    "FDR > 0.05" = "#839098",
+    "Adjusted P unavailable" = "#79668c",
+    "Higher in p27CKO + E-Stim" = "#bf5700"
   )
-  if (identical(view, "volcano")) {
-    palette <- append(
-      palette,
-      c("Adjusted P unavailable" = "#8f5aa6"),
-      after = 2L
-    )
-  }
-  palette
 }
 
 de_significance_symbols <- function(view = c("ma", "volcano")) {
-  view <- match.arg(view)
-  symbols <- c(
-    "Higher in Control" = "square",
-    "Not significant" = "circle",
-    "Higher with E-Stim" = "triangle-up"
+  c(
+    "Higher in p27CKO" = "square",
+    "FDR > 0.05" = "circle",
+    "Adjusted P unavailable" = "x",
+    "Higher in p27CKO + E-Stim" = "triangle-up"
   )
-  if (identical(view, "volcano")) {
-    symbols <- append(
-      symbols,
-      c("Adjusted P unavailable" = "x"),
-      after = 2L
-    )
-  }
-  symbols
 }
 
 de_plot_status <- function(data, view = c("ma", "volcano")) {
-  view <- match.arg(view)
-  status <- as.character(data$significance)
-  if (identical(view, "volcano")) {
-    status[is.na(data$probability)] <- "Adjusted P unavailable"
-  }
-  factor(status, levels = de_significance_levels(view))
+  factor(as.character(data$significance), levels = de_significance_levels())
 }
 
 prepare_de_plot_data <- function(primary_de, fdr_threshold = 0.05) {
@@ -76,7 +51,10 @@ prepare_de_plot_data <- function(primary_de, fdr_threshold = 0.05) {
       fdr_threshold < 0 ||
       fdr_threshold > 1
   ) {
-    stop("The FDR threshold must be one number from zero to one.", call. = FALSE)
+    stop(
+      "The FDR threshold must be one number from zero to one.",
+      call. = FALSE
+    )
   }
   gene_column <- de_column(primary_de, c("gene"))
   base_mean_column <- de_column(primary_de, c("baseMean", "base_mean"))
@@ -105,17 +83,21 @@ prepare_de_plot_data <- function(primary_de, fdr_threshold = 0.05) {
     .Machine$double.xmin
   ))
 
-  significance <- rep("Not significant", nrow(data))
+  significance <- ifelse(
+    probability_available,
+    "FDR > 0.05",
+    "Adjusted P unavailable"
+  )
   significance[
     probability_available &
       data$probability <= fdr_threshold &
       data$log2_fold_change < 0
-  ] <- "Higher in Control"
+  ] <- "Higher in p27CKO"
   significance[
     probability_available &
       data$probability <= fdr_threshold &
       data$log2_fold_change > 0
-  ] <- "Higher with E-Stim"
+  ] <- "Higher in p27CKO + E-Stim"
   data$significance <- factor(
     significance,
     levels = de_significance_levels()
@@ -138,9 +120,7 @@ prepare_de_table_data <- function(primary_de) {
     "baseMean",
     "log2FoldChange",
     "lfcSE",
-    "padj",
-    "mean_count_control",
-    "mean_count_estim"
+    "padj"
   )
   if (!all(result_columns %in% names(primary_de))) {
     stop(
@@ -154,9 +134,7 @@ prepare_de_table_data <- function(primary_de) {
     "Base Mean",
     "log2FC",
     "LFC SE",
-    "Adjusted P",
-    "Mean Count Control",
-    "Mean Count E-Stim"
+    "Adjusted P"
   )
   displayed
 }
@@ -183,10 +161,10 @@ de_direction <- function(log2_fold_change) {
     return("Unavailable")
   }
   if (log2_fold_change[[1L]] > 0) {
-    return("Higher with E-Stim")
+    return("Higher in p27CKO + E-Stim")
   }
   if (log2_fold_change[[1L]] < 0) {
-    return("Higher in Control")
+    return("Higher in p27CKO")
   }
   "No directional change"
 }
@@ -195,7 +173,7 @@ de_hover_text <- function(data, view = c("ma", "volcano")) {
   view <- match.arg(view)
   status <- data$plot_status %||% data$significance
   status_label <- if (identical(view, "ma")) {
-    "MA category"
+    "FDR status"
   } else {
     "FDR status"
   }
@@ -216,13 +194,19 @@ de_hover_text <- function(data, view = c("ma", "volcano")) {
 
 de_plot_coordinates <- function(data, view) {
   view <- match.arg(view, c("ma", "volcano"))
+  data <- data[
+    !is.na(data$probability) &
+      is.finite(data$log2_fold_change) &
+      is.finite(data$base_mean),
+    ,
+    drop = FALSE
+  ]
   if (identical(view, "ma")) {
     data$plot_x <- pmax(data$base_mean, 0) + 1
     data$plot_y <- data$log2_fold_change
   } else {
     data$plot_x <- data$log2_fold_change
     data$plot_y <- data$minus_log10_probability
-    data$plot_y[is.na(data$plot_y)] <- 0
   }
   data
 }
@@ -241,7 +225,7 @@ make_de_plotly <- function(
   active <- casefold_key(data$gene) == casefold_key(active_gene)
   highlighted <- data[active, , drop = FALSE]
   background <- data[!active, , drop = FALSE]
-  levels <- de_significance_levels(view)
+  levels <- setdiff(de_significance_levels(view), "Adjusted P unavailable")
   palette <- de_significance_palette(view)
   symbols <- de_significance_symbols(view)
 
@@ -252,7 +236,9 @@ make_de_plotly <- function(
       ,
       drop = FALSE
     ]
-    if (nrow(trace_data) == 0L) next
+    if (nrow(trace_data) == 0L) {
+      next
+    }
     plot <- plotly::add_trace(
       plot,
       data = trace_data,
@@ -267,7 +253,7 @@ make_de_plotly <- function(
         size = 4.5,
         color = unname(palette[[status]]),
         symbol = unname(symbols[[status]]),
-        opacity = if (identical(status, "Not significant")) 0.42 else 0.72,
+        opacity = if (identical(status, "FDR > 0.05")) 0.42 else 0.72,
         line = list(width = 0)
       ),
       name = status,
@@ -302,12 +288,15 @@ make_de_plotly <- function(
 
   if (identical(view, "ma")) {
     positive_x <- data$plot_x[is.finite(data$plot_x) & data$plot_x > 0]
+    if (!length(positive_x)) {
+      positive_x <- 1
+    }
     decade_ticks <- 10^seq(
       floor(log10(min(positive_x))),
       ceiling(log10(max(positive_x)))
     )
     xaxis <- list(
-      title = "Mean normalized count (baseMean + 1; log scale)",
+      title = "Mean normalized count + 1<br>(log scale)",
       type = "log",
       tickmode = "array",
       tickvals = decade_ticks,
@@ -319,7 +308,7 @@ make_de_plotly <- function(
       )
     )
     yaxis <- list(
-      title = "Shrunken log2 fold change (E-Stim / Control)",
+      title = "Shrunken log2 fold change<br>(p27CKO + E-Stim vs p27CKO)",
       zeroline = FALSE
     )
     shapes <- list(list(
@@ -335,7 +324,7 @@ make_de_plotly <- function(
   } else {
     fdr_reference <- -log10(0.05)
     xaxis <- list(
-      title = "Shrunken log2 fold change (E-Stim / Control)",
+      title = "Shrunken log2 fold change<br>(p27CKO + E-Stim vs p27CKO)",
       zeroline = TRUE,
       zerolinecolor = "#b8c1c8"
     )
@@ -360,9 +349,12 @@ make_de_plotly <- function(
       font = list(color = "#526b7b", size = 11)
     ))
   }
-  legend_title <- if (identical(view, "ma")) "MA category" else "FDR status"
+  legend_title <- "FDR status · threshold 0.05"
   plot <- plotly::layout(
     plot,
+    font = list(family = "Arial, sans-serif", size = 13, color = "#20282c"),
+    paper_bgcolor = "#ffffff",
+    plot_bgcolor = "#ffffff",
     xaxis = xaxis,
     yaxis = yaxis,
     shapes = shapes,
@@ -385,7 +377,11 @@ make_de_plotly <- function(
       filename = paste0("espiviz-primary-de-", view)
     )
   )
-  plotly::event_register(plot, "plotly_click")
+  plot <- plotly::event_register(plot, "plotly_click")
+  htmlwidgets::onRender(
+    plot,
+    "function(el) { window.ESPIviz.resizeDEPlot(el); }"
+  )
 }
 
 make_de_ggplot <- function(
@@ -395,29 +391,33 @@ make_de_ggplot <- function(
 ) {
   view <- match.arg(view)
   data <- prepare_de_plot_data(primary_de)
+  selected_index <- match(casefold_key(active_gene), casefold_key(data$gene))
+  omitted_reason <- if (is.na(selected_index)) {
+    "not in these results"
+  } else if (is.na(data$probability[[selected_index]])) {
+    "adjusted P unavailable"
+  } else {
+    "coordinates unavailable"
+  }
   data <- de_plot_coordinates(data, view)
   data$plot_status <- de_plot_status(data, view)
   data$active <- casefold_key(data$gene) == casefold_key(active_gene)
   palette <- de_significance_palette(view)
   shapes <- c(
-    "Higher in Control" = 15,
-    "Not significant" = 16,
-    "Higher with E-Stim" = 17
+    "Higher in p27CKO" = 15,
+    "FDR > 0.05" = 16,
+    "Adjusted P unavailable" = 4,
+    "Higher in p27CKO + E-Stim" = 17
   )
-  if (identical(view, "volcano")) {
-    shapes <- append(
-      shapes,
-      c("Adjusted P unavailable" = 4),
-      after = 2L
-    )
-  }
-  caption <- "Positive fold changes indicate higher expression with E-Stim."
-  if (identical(view, "volcano")) {
-    caption <- paste(
-      caption,
-      "Crosses at zero have no adjusted P value and are not assigned an FDR result."
-    )
-  }
+  caption <- paste0(
+    if (any(data$active)) {
+      "Highlighted gene: "
+    } else {
+      paste0("Selected gene (omitted; ", omitted_reason, "): ")
+    },
+    active_gene,
+    ". p27CKO + E-Stim vs p27CKO. FDR threshold = 0.05. Genes without adjusted P values are omitted."
+  )
   plot <- ggplot2::ggplot(
     data,
     ggplot2::aes(
@@ -438,7 +438,7 @@ make_de_ggplot <- function(
       ggplot2::scale_x_log10() +
       ggplot2::labs(
         x = "Mean normalized count (baseMean + 1; log scale)",
-        y = "Shrunken log2 fold change (E-Stim / Control)"
+        y = "Shrunken log2 fold change\n(p27CKO + E-Stim vs p27CKO)"
       )
   } else {
     plot <- plot +
@@ -459,7 +459,7 @@ make_de_ggplot <- function(
         size = 3.2
       ) +
       ggplot2::labs(
-        x = "Shrunken log2 fold change (E-Stim / Control)",
+        x = "Shrunken log2 fold change\n(p27CKO + E-Stim vs p27CKO)",
         y = "−log10 adjusted P"
       )
   }
@@ -482,18 +482,18 @@ make_de_ggplot <- function(
     ) +
     ggplot2::scale_color_manual(
       values = palette,
-      breaks = de_significance_levels(view),
-      drop = FALSE
+      breaks = setdiff(de_significance_levels(view), "Adjusted P unavailable"),
+      drop = TRUE
     ) +
     ggplot2::scale_shape_manual(
       values = shapes,
-      breaks = de_significance_levels(view),
-      drop = FALSE
+      breaks = setdiff(de_significance_levels(view), "Adjusted P unavailable"),
+      drop = TRUE
     ) +
     ggplot2::labs(
-      color = if (identical(view, "ma")) "MA category" else "FDR status",
-      shape = if (identical(view, "ma")) "MA category" else "FDR status",
-      caption = caption
+      color = "FDR status · threshold 0.05",
+      shape = "FDR status · threshold 0.05",
+      caption = wrap_caption(caption, 96)
     ) +
     ggplot2::theme_minimal(base_size = 11) +
     ggplot2::theme(
@@ -501,6 +501,7 @@ make_de_ggplot <- function(
       plot.background = ggplot2::element_rect(fill = "white", color = NA),
       legend.position = "bottom",
       legend.box = "vertical",
+      plot.caption.position = "plot",
       plot.caption = ggplot2::element_text(
         color = "#526b7b",
         hjust = 0,
@@ -524,19 +525,33 @@ current_de_gene_ui <- function(primary_de, active_gene) {
     ))
   }
   current <- current[1L, , drop = FALSE]
+  fdr_status <- if (is.na(current$probability[[1L]])) {
+    "Adjusted P unavailable"
+  } else if (current$probability[[1L]] <= 0.05) {
+    "FDR ≤ 0.05"
+  } else {
+    "FDR > 0.05"
+  }
+  fields <- list(
+    "Mean normalized count" = format_de_value(current$base_mean[[1L]]),
+    "Shrunken log₂ fold change" = format_de_value(current$log2_fold_change[[
+      1L
+    ]]),
+    "Adjusted P" = format_de_probability(current$probability[[1L]]),
+    "Estimated direction" = de_direction(current$log2_fold_change[[1L]]),
+    "FDR status" = fdr_status
+  )
   htmltools::div(
     class = "current-gene-display de-gene-detail",
     htmltools::strong(current$gene[[1L]]),
     htmltools::span("Selected across the app"),
     htmltools::tags$dl(
-      htmltools::tags$dt("baseMean"),
-      htmltools::tags$dd(format_de_value(current$base_mean[[1L]])),
-      htmltools::tags$dt("Shrunken log2FC"),
-      htmltools::tags$dd(format_de_value(current$log2_fold_change[[1L]])),
-      htmltools::tags$dt("Adjusted P"),
-      htmltools::tags$dd(format_de_probability(current$probability[[1L]])),
-      htmltools::tags$dt("Direction"),
-      htmltools::tags$dd(de_direction(current$log2_fold_change[[1L]]))
+      lapply(names(fields), function(label) {
+        htmltools::div(
+          htmltools::tags$dt(label),
+          htmltools::tags$dd(fields[[label]])
+        )
+      })
     )
   )
 }
@@ -548,10 +563,9 @@ differential_expression_ui <- function(id) {
     htmltools::div(
       class = "page-heading",
       htmltools::div(
-        htmltools::p("Condition model", class = "eyebrow"),
         htmltools::h1("Differential expression"),
         htmltools::p(
-          "Complete gene-level results from the primary Mouse × Condition pseudobulk analysis.",
+          "Six-sample pseudobulk analysis · p27CKO + E-Stim vs p27CKO",
           class = "lede"
         )
       ),
@@ -559,19 +573,20 @@ differential_expression_ui <- function(id) {
         class = "heading-actions",
         shiny::downloadButton(
           ns("download_de"),
-          "Download complete table",
+          "Complete DE results (CSV)",
           class = "btn-primary"
         )
       )
     ),
     bslib::layout_columns(
-      col_widths = c(8, 4, 12),
+      col_widths = c(12, 12, 12),
+      class = "de-layout",
       bslib::card(
         full_screen = TRUE,
         bslib::card_header(
           htmltools::div(
             class = "de-plot-header",
-            htmltools::span("Gene-level effect overview"),
+            htmltools::span("Gene-level results"),
             shiny::radioButtons(
               ns("de_view"),
               "Plot view",
@@ -583,38 +598,37 @@ differential_expression_ui <- function(id) {
         ),
         htmltools::p(
           paste(
-            "The MA plot puts effect size in the context of expression strength;",
-            "the volcano plot emphasizes statistical evidence.",
-            "Positive fold changes indicate higher expression with E-Stim.",
-            "Genes without an adjusted P value are part of Not significant",
-            "on the MA plot and appear as crosses at zero only on the volcano plot."
+            "Genes without adjusted P values are omitted.",
+            "FDR threshold: 0.05."
           ),
           id = ns("de_plot_help"),
           class = "supporting-copy de-plot-copy"
         ),
         htmltools::div(
+          class = "de-plot-scroll",
           role = "region",
+          tabindex = "0",
           `aria-label` = "Interactive differential-expression plot",
           `aria-describedby` = ns("de_plot_help"),
           plotly::plotlyOutput(ns("de_plot"), height = "560px")
         )
       ),
       bslib::card(
+        class = "de-inspector",
         bslib::card_header("Current gene"),
         shiny::uiOutput(ns("current_gene")),
         shiny::actionButton(
           ns("explore_current"),
           "Open in Explore",
-          class = "btn-primary w-100"
+          class = "btn-primary"
         ),
-        htmltools::hr(),
         htmltools::p(
           "Choose a point or table row to change the current gene.",
           class = "supporting-copy"
         ),
-        htmltools::p("Plot downloads", class = "sidebar-section-title"),
-        htmltools::div(
-          class = "download-stack",
+        htmltools::tags$details(
+          class = "data-disclosure de-downloads",
+          htmltools::tags$summary("Download figures"),
           shiny::downloadButton(
             ns("download_ma_png"),
             "MA PNG",
@@ -640,6 +654,16 @@ differential_expression_ui <- function(id) {
       bslib::card(
         class = "span-12",
         bslib::card_header("Pseudobulk DE results"),
+        result_filter_ui(ns),
+        shiny::uiOutput(ns("filter_status")),
+        htmltools::p(
+          "Sorted by adjusted P, then absolute effect size. Unavailable adjusted P values appear last. Base Mean is the mean normalized pseudobulk count across the six samples.",
+          class = "supporting-copy"
+        ),
+        shiny::downloadButton(
+          ns("download_filtered"),
+          "Filtered DE results (CSV)"
+        ),
         DT::DTOutput(ns("de_table"))
       )
     )
@@ -691,44 +715,37 @@ differential_expression_server <- function(
       ignoreNULL = TRUE
     )
 
+    filtered_de <- shiny::reactive(filter_result_rows(
+      bundle$primary_de,
+      input$filter_direction,
+      input$filter_fdr,
+      search = input$filter_search
+    ))
+    output$filter_status <- shiny::renderUI(result_count_ui(
+      nrow(filtered_de()),
+      nrow(bundle$primary_de)
+    ))
+    shiny::observeEvent(input$reset_filters, reset_result_filters(session))
     output$de_table <- DT::renderDT(
-      {
-        table <- DT::datatable(
-          prepare_de_table_data(bundle$primary_de),
-          rownames = FALSE,
-          filter = "top",
-          selection = "single",
-          class = "compact stripe",
-          extensions = "Scroller",
-          options = list(
-            deferRender = TRUE,
-            scrollX = TRUE,
-            scrollY = 610,
-            scroller = TRUE,
-            pageLength = 50L,
-            lengthChange = FALSE,
-            search = list(caseInsensitive = TRUE)
-          )
-        )
-        table <- DT::formatRound(
-          table,
-          columns = c("Base Mean", "Mean Count Control", "Mean Count E-Stim"),
-          digits = 2L
-        )
-        table <- DT::formatRound(
-          table,
-          columns = c("log2FC", "LFC SE"),
-          digits = 3L
-        )
-        DT::formatSignif(table, columns = "Adjusted P", digits = 3L)
-      },
+      scientific_datatable(prepare_de_table_data(filtered_de())),
       server = TRUE
+    )
+    output$download_filtered <- shiny::downloadHandler(
+      filename = function() "espiviz-primary-de-filtered.csv",
+      content = function(file) {
+        utils::write.csv(
+          label_result_conditions(filtered_de()),
+          file,
+          row.names = FALSE,
+          na = ""
+        )
+      }
     )
 
     shiny::observeEvent(input$de_table_rows_selected, {
       row <- input$de_table_rows_selected
-      if (length(row) > 0L && row[[1L]] <= nrow(bundle$primary_de)) {
-        set_state_gene(state, bundle, bundle$primary_de$gene[[row[[1L]]]])
+      if (length(row) > 0L && row[[1L]] <= nrow(filtered_de())) {
+        set_state_gene(state, bundle, filtered_de()$gene[[row[[1L]]]])
       }
     })
 
@@ -739,7 +756,12 @@ differential_expression_server <- function(
         "espiviz-primary-condition-differential-expression.csv"
       },
       content = function(file) {
-        utils::write.csv(bundle$primary_de, file, row.names = FALSE, na = "")
+        utils::write.csv(
+          label_result_conditions(bundle$primary_de),
+          file,
+          row.names = FALSE,
+          na = ""
+        )
       }
     )
 
@@ -748,10 +770,14 @@ differential_expression_server <- function(
       content = function(file) {
         ggplot2::ggsave(
           file,
-          plot = make_de_ggplot(
-            bundle$primary_de,
-            state$active_gene(),
-            view = "ma"
+          plot = figure_context(
+            make_de_ggplot(bundle$primary_de, state$active_gene(), view = "ma"),
+            bundle,
+            "Primary condition model · MA",
+            genes = state$active_gene(),
+            context = TRUE,
+            note = "Fixed six-sample pseudobulk inferential results; cell selections do not change this model.",
+            scope_text = "Fixed six-sample condition model"
           ),
           width = 8.5,
           height = 7,
@@ -766,10 +792,14 @@ differential_expression_server <- function(
       content = function(file) {
         ggplot2::ggsave(
           file,
-          plot = make_de_ggplot(
-            bundle$primary_de,
-            state$active_gene(),
-            view = "ma"
+          plot = figure_context(
+            make_de_ggplot(bundle$primary_de, state$active_gene(), view = "ma"),
+            bundle,
+            "Primary condition model · MA",
+            genes = state$active_gene(),
+            context = TRUE,
+            note = "Fixed six-sample pseudobulk inferential results; cell selections do not change this model.",
+            scope_text = "Fixed six-sample condition model"
           ),
           device = grDevices::cairo_pdf,
           width = 8.5,
@@ -784,10 +814,18 @@ differential_expression_server <- function(
       content = function(file) {
         ggplot2::ggsave(
           file,
-          plot = make_de_ggplot(
-            bundle$primary_de,
-            state$active_gene(),
-            view = "volcano"
+          plot = figure_context(
+            make_de_ggplot(
+              bundle$primary_de,
+              state$active_gene(),
+              view = "volcano"
+            ),
+            bundle,
+            "Primary condition model · VOLCANO",
+            genes = state$active_gene(),
+            context = TRUE,
+            note = "Fixed six-sample pseudobulk inferential results; cell selections do not change this model.",
+            scope_text = "Fixed six-sample condition model"
           ),
           width = 8.5,
           height = 7,
@@ -802,10 +840,18 @@ differential_expression_server <- function(
       content = function(file) {
         ggplot2::ggsave(
           file,
-          plot = make_de_ggplot(
-            bundle$primary_de,
-            state$active_gene(),
-            view = "volcano"
+          plot = figure_context(
+            make_de_ggplot(
+              bundle$primary_de,
+              state$active_gene(),
+              view = "volcano"
+            ),
+            bundle,
+            "Primary condition model · VOLCANO",
+            genes = state$active_gene(),
+            context = TRUE,
+            note = "Fixed six-sample pseudobulk inferential results; cell selections do not change this model.",
+            scope_text = "Fixed six-sample condition model"
           ),
           device = grDevices::cairo_pdf,
           width = 8.5,

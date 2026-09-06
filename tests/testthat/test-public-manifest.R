@@ -100,6 +100,7 @@ test_that("Connect manifest contains only app runtime files and dependencies", {
       "R/00-utils.R",
       "R/90-app-shell.R",
       "www/favicon.svg",
+      "www/interactions.js",
       "www/styles.css"
     ) %in%
       file_names

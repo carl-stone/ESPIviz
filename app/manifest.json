@@ -2493,40 +2493,52 @@
       "checksum": "5a935c1dfcf56862f30617bb8f9b4827"
     },
     "R/00-utils.R": {
-      "checksum": "e1e4673a72f96d1c0b27735df508e1b5"
+      "checksum": "c9d56fe04d83e72e4f8d2fdeeafd2e18"
     },
     "R/01-bundle.R": {
       "checksum": "b5167115fe24187d5d6fff72309586fa"
     },
     "R/02-expression.R": {
-      "checksum": "cd6d0b31e3c494966d789dfc04c29f1d"
+      "checksum": "16f9745b906737ef6b0c70124451c7e3"
     },
     "R/03-state-plots.R": {
-      "checksum": "99c7084847fdc868abe781a8fb54c3b0"
+      "checksum": "1e7a935a8191e1413f48ce0edb48ccc9"
     },
     "R/04-cell-level.R": {
-      "checksum": "576e0e3c729eb5a8f4c952277ded6a13"
+      "checksum": "5ef9f38d6f06069a85b8a4056328d6b6"
+    },
+    "R/05-view-contract.R": {
+      "checksum": "fe08762ed84236e5bd6b5d31d2b3f01e"
+    },
+    "R/06-result-tables.R": {
+      "checksum": "db911599d9b3ebe3306eb447163a81b4"
+    },
+    "R/07-explore-exports.R": {
+      "checksum": "5c0f14cf488505f17aba4457172ebb1a"
     },
     "R/10-explore.R": {
-      "checksum": "e36c640b9047c84df36b486d23312e53"
+      "checksum": "1dc72f17afe4896f2ee152567a19bf64"
     },
     "R/20-differential-expression.R": {
-      "checksum": "e501715d85e3b313dc13c36e63d18138"
+      "checksum": "8a84615cf1e8656d67d6d5a4b5795b93"
     },
     "R/30-pathways.R": {
-      "checksum": "3dff5eb48c7a9b85d9e9bef309720a51"
+      "checksum": "4ddecfb2ea684a599c9ba87c89ca9999"
     },
     "R/40-about.R": {
-      "checksum": "f91c78ff7caa2b99d4568a77b40f106f"
+      "checksum": "386500a6749fa7a0cdd6c7efafd7ecff"
     },
     "R/90-app-shell.R": {
-      "checksum": "282caaa20aff4c841558bbf447d0c0ce"
+      "checksum": "4370f1302623ddcdd00e1de9f0f93011"
     },
     "www/favicon.svg": {
-      "checksum": "4782cf5e9e855d98cc5aad2fb0480b1b"
+      "checksum": "d4ddfda21eb037bf8ae65f722677f753"
+    },
+    "www/interactions.js": {
+      "checksum": "2527d722ff60b34d8b8632658574662e"
     },
     "www/styles.css": {
-      "checksum": "d7ee8adf88133b94d062df5aee3021e7"
+      "checksum": "88a99a0fc17321db4ab124993b6f2a5c"
     }
   },
   "users": null

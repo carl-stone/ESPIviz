@@ -105,3 +105,41 @@ data links will be added after those public records exist.
 
 Do not replace a published bundle in place. Data changes require a new immutable
 release, checksum, schema-compatible manifest entry, and application deployment.
+
+## Reproducing and exporting an exploration
+
+The analysis scope is the ordered union of the current gene, optional second
+gene, and saved gene set. Summary and expression downloads retain all genes
+across every visual page. The saved-set TXT contains only the saved set; the
+analysis-gene TXT contains the complete union. Each result states whether it
+uses selected cells or all-cell context.
+
+Use **Save view** to copy a link containing compact settings and whole-cluster
+selections. Arbitrary cell selections and longer gene lists use a local JSON
+view file. Both formats include the data version and checksum; restoration
+requires the matching immutable bundle. Files contain public cell IDs only.
+
+Result figures have dedicated PNG/PDF downloads, underlying CSV data, and
+shared scope/version captions. View metadata records the settings and gene
+scope. Expression RDS exports preserve the sparse shifted PFlog matrix and
+per-cell centers. For a suitably small exported selection:
+
+```r
+x <- readRDS("espiviz-selected-cell-expression.rds")
+PFlog <- sweep(
+  as.matrix(x$normalized_expression$sparse),
+  2L, x$normalized_expression$center, "-"
+)
+```
+
+Rows are genes and columns are cells. Raw-count detection remains independent
+of centered PFlog expression. Undetected genes contribute zero blend strength;
+constant detected values use intensity 0.5. The blend scales each gene among
+detected cells independently and is not an expression ratio.
+
+Automatic summaries use dot plots above six genes. Violin pages contain at
+most six genes, with individual points and a median for groups below ten cells.
+Samples without selected cells remain visible with zero cells and missing
+expression statistics. Dot area is zero at zero detection; crosses indicate
+no cells. Shared dot color limits cover all analysis genes and summary groups.
+LOESS intervals are descriptive cell-level intervals, not replicate uncertainty.

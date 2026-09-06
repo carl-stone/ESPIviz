@@ -18,12 +18,12 @@ test_that("desktop pages use natural height so plots and tables do not collapse"
   expect_no_match(html, '<body class="bslib-page-fill', fixed = TRUE)
 })
 
-test_that("Explore result panels span the full plotting grid", {
+test_that("Explore gives the cell map and expression summaries equal width", {
   html <- htmltools::renderTags(
     explore_ui("explore_test", synthetic_bundle())
   )$html
 
-  expect_match(html, 'col-widths-sm="8,4,12"', fixed = TRUE)
+  expect_match(html, 'col-widths-sm="6,6"', fixed = TRUE)
 })
 
 test_that("secondary full-width panels span their plotting grids", {
@@ -31,9 +31,9 @@ test_that("secondary full-width panels span their plotting grids", {
   pathway_html <- htmltools::renderTags(pathways_ui("pathways_test"))$html
   about_html <- htmltools::renderTags(about_ui("about_test"))$html
 
-  expect_match(de_html, 'col-widths-sm="8,4,12"', fixed = TRUE)
-  expect_match(pathway_html, 'col-widths-sm="7,5,12"', fixed = TRUE)
-  expect_match(about_html, 'col-widths-sm="7,5,12"', fixed = TRUE)
+  expect_match(de_html, 'col-widths-sm="12,12,12"', fixed = TRUE)
+  expect_match(pathway_html, 'col-widths-sm="12,12,12"', fixed = TRUE)
+  expect_match(about_html, 'col-widths-sm="7,5"', fixed = TRUE)
 })
 
 test_that("About describes the complete enrichment browser", {
@@ -63,12 +63,12 @@ test_that("Explore limits UMAP colors and exposes every selection mode", {
     synthetic_bundle()
   ))$html
 
-  expect_match(html, "Log normalized expression", fixed = TRUE)
+  expect_match(html, "log normalized expression", fixed = TRUE)
   expect_match(html, ">Detection<", fixed = TRUE)
   expect_match(html, ">Cluster<", fixed = TRUE)
   expect_match(html, ">Condition<", fixed = TRUE)
   expect_match(html, "Clear selection", fixed = TRUE)
-  expect_match(html, "Click a cell or use box or lasso", fixed = TRUE)
+  expect_match(html, "Click a cell, drag a lasso", fixed = TRUE)
   expect_no_match(html, "QC", fixed = TRUE)
 })
 
@@ -96,7 +96,7 @@ test_that("Explore exposes an explicit whole-cluster selection control", {
   expect_match(html, "explore_test-select_cluster_cells", fixed = TRUE)
 })
 
-test_that("Explore cluster menu can extend beyond the current-selection card", {
+test_that("Explore menu content allows selection dropdowns to extend over the plots", {
   styles <- paste(
     readLines(
       file.path(repo_root, "app", "www", "styles.css"),
@@ -108,9 +108,8 @@ test_that("Explore cluster menu can extend beyond the current-selection card", {
   expect_match(
     styles,
     paste0(
-      "(?s)[.]selection-card-compact[ ]*,[[:space:]]*",
-      "[.]selection-card-compact[ ]+[.]card-body[[:space:]]*",
-      "\\{[^}]*overflow:[[:space:]]*visible;"
+      "(?s)[.]tool-content[[:space:]]*",
+      "\\{[^}]*position:[[:space:]]*absolute;[^}]*z-index:"
     ),
     perl = TRUE
   )
@@ -123,8 +122,8 @@ test_that("Explore provides plotted summaries by cluster and condition", {
 
   expect_match(html, "explore_test-cluster_summary_plot_ui", fixed = TRUE)
   expect_match(html, "explore_test-condition_summary_plot_ui", fixed = TRUE)
-  expect_match(html, "Mean log normalized expression", fixed = TRUE)
-  expect_match(html, "dot size", fixed = TRUE)
+  expect_match(html, "mean log normalized expression", fixed = TRUE)
+  expect_match(html, "dot area", fixed = TRUE)
 })
 
 test_that("expression summary plots default to violins with dot plots available", {
@@ -149,7 +148,7 @@ test_that("expression summary plots default to violins with dot plots available"
     expect_length(matched, 1L)
     expect_match(
       matched,
-      '<option value="violin" selected>Violin plot</option>',
+      '<option value="auto" selected>Automatic</option>',
       fixed = TRUE
     )
     expect_match(
@@ -401,17 +400,21 @@ test_that("deep-link view names map without falling back early", {
   expect_identical(app_view_slug("About"), "about")
 })
 
-test_that("narrow desktop layouts collapse and overlay the Explore sidebar", {
+test_that("narrow layouts place navigation above a single column of figures", {
   styles <- paste(
     readLines(file.path(repo_root, "app", "www", "styles.css"), warn = FALSE),
     collapse = "\n"
   )
 
   expect_match(styles, "@media (max-width: 900px)", fixed = TRUE)
-  expect_match(styles, "--bslib-sidebar-js-window-size: mobile", fixed = TRUE)
   expect_match(
     styles,
-    ".bslib-sidebar-layout:not(.sidebar-collapsed) > .sidebar",
-    fixed = TRUE
+    "(?s)#main_nav[[:space:]]*\\{[^}]*flex-direction:[[:space:]]*row;",
+    perl = TRUE
+  )
+  expect_match(
+    styles,
+    "(?s)[.]explore-grid[[:space:]]*\\{[^}]*grid-template-columns:[[:space:]]*minmax\\(0, 1fr\\)",
+    perl = TRUE
   )
 })

@@ -73,7 +73,12 @@ prepare_pathway_plot_data <- function(pathways) {
     duplicated(data$label, fromLast = TRUE)
   data$plot_label <- ifelse(
     repeated_labels,
-    paste(data$label, source_values, direction_values, sep = " · "),
+    paste(
+      data$label,
+      source_values,
+      condition_label(direction_values),
+      sep = " · "
+    ),
     data$label
   )
   repeated_plot_labels <- duplicated(data$plot_label) |
@@ -104,7 +109,7 @@ prepare_pathway_plot_data <- function(pathways) {
   data$hover_text <- paste0(
     htmltools::htmlEscape(data$label),
     "<br>Direction: ",
-    direction_values,
+    condition_label(direction_values),
     "<br>Method: ",
     source_values,
     "<br>",
@@ -183,16 +188,20 @@ displayed_pathway_results <- function(
 }
 
 pathway_direction_palette <- function() {
-  c("Control" = "#2166AC", "E-Stim" = "#B52865")
+  c("Control" = "#2865a0", "E-Stim" = "#bf5700")
 }
 
 pathway_direction_symbols <- function() {
   c("Control" = "circle", "E-Stim" = "diamond")
 }
 
-pathway_marker_sizes <- function(evidence_strength, size_range = c(10, 25)) {
+pathway_marker_sizes <- function(
+  evidence_strength,
+  size_range = c(10, 25),
+  limits = NULL
+) {
   diameter_scale <- sqrt(pmax(as.numeric(evidence_strength), 0))
-  limits <- base::range(diameter_scale, finite = TRUE)
+  limits <- limits %||% base::range(diameter_scale, finite = TRUE)
   if (diff(limits) == 0) {
     return(rep(mean(size_range), length(diameter_scale)))
   }
@@ -230,6 +239,24 @@ make_pathway_plotly <- function(pathways, active_pathway, source) {
       levels = unique(method_data$plot_label),
       ordered = TRUE
     )
+    tick_labels <- method_data$label
+    repeated <- duplicated(tick_labels) |
+      duplicated(tick_labels, fromLast = TRUE)
+    tick_labels[repeated] <- paste(
+      tick_labels[repeated],
+      condition_label(method_data$direction[repeated]),
+      sep = " · "
+    )
+    tick_labels <- vapply(
+      tick_labels,
+      function(label) {
+        paste(
+          htmltools::htmlEscape(strwrap(label, width = 52L)),
+          collapse = "<br>"
+        )
+      },
+      character(1L)
+    )
     panel_data[[method_index]] <- method_data
 
     panel <- plotly::plot_ly(source = source)
@@ -239,7 +266,9 @@ make_pathway_plotly <- function(pathways, active_pathway, source) {
         ,
         drop = FALSE
       ]
-      if (nrow(direction_data) == 0L) next
+      if (nrow(direction_data) == 0L) {
+        next
+      }
 
       show_direction_legend <- !direction %in% legend_seen
       legend_seen <- unique(c(legend_seen, direction))
@@ -252,7 +281,7 @@ make_pathway_plotly <- function(pathways, active_pathway, source) {
         customdata = ~pathway_id,
         text = ~hover_text,
         hoverinfo = "text",
-        name = direction,
+        name = condition_label(direction),
         legendgroup = direction,
         showlegend = show_direction_legend,
         marker = list(
@@ -280,7 +309,11 @@ make_pathway_plotly <- function(pathways, active_pathway, source) {
           title = list(text = method),
           automargin = TRUE,
           categoryorder = "array",
-          categoryarray = as.character(method_data$plot_label)
+          categoryarray = as.character(method_data$plot_label),
+          tickmode = "array",
+          tickvals = as.character(method_data$plot_label),
+          ticktext = tick_labels,
+          tickfont = list(size = 12)
         )
       )
   }
@@ -329,7 +362,10 @@ make_pathway_plotly <- function(pathways, active_pathway, source) {
         x = 0,
         y = 1.08
       ),
-      margin = list(l = 30, r = 20, t = 55, b = 45),
+      font = list(family = "Arial, sans-serif", size = 13, color = "#20282c"),
+      paper_bgcolor = "#ffffff",
+      plot_bgcolor = "#ffffff",
+      margin = list(l = 40, r = 28, t = 55, b = 55),
       hovermode = "closest"
     )
   # subplot() initializes an empty shape list that its lazy layout merge keeps.
@@ -350,14 +386,25 @@ make_pathway_ggplot <- function(pathways, active_pathway) {
     ,
     drop = FALSE
   ]
-  data$plot_label <- factor(
-    data$plot_label,
-    levels = unique(data$plot_label),
-    ordered = TRUE
+  repeated <- duplicated(paste(data$source, data$label)) |
+    duplicated(paste(data$source, data$label), fromLast = TRUE)
+  labels <- ifelse(
+    repeated,
+    paste(data$label, data$direction, sep = " · "),
+    data$label
   )
+  data$plot_label <- vapply(labels, wrap_caption, character(1L), width = 49L)
+  lines <- vapply(strsplit(data$plot_label, "\n"), length, integer(1L))
+  space <- lines + 0.6
+  data$plot_y <- cumsum(space) - space / 2
   baselines <- unique(data[c("panel_label", "baseline")])
 
-  ggplot2::ggplot(data, ggplot2::aes(x = score, y = plot_label)) +
+  ggplot2::ggplot(data, ggplot2::aes(x = score, y = plot_y)) +
+    ggplot2::scale_y_continuous(
+      breaks = data$plot_y,
+      labels = data$plot_label,
+      expand = ggplot2::expansion(add = 0.9)
+    ) +
     ggplot2::geom_vline(
       data = baselines,
       ggplot2::aes(xintercept = baseline),
@@ -395,22 +442,30 @@ make_pathway_ggplot <- function(pathways, active_pathway) {
     ggplot2::scale_fill_manual(
       name = "Direction",
       values = pathway_direction_palette(),
+      labels = condition_label,
       drop = FALSE
     ) +
     ggplot2::scale_shape_manual(
       name = "Direction",
-      values = c("Control" = 21, "E-Stim" = 22),
+      values = c("Control" = 21, "E-Stim" = 23),
+      labels = condition_label,
       drop = FALSE
     ) +
     ggplot2::scale_size_continuous(
       name = "-log10 adjusted P",
-      range = c(3, 8),
+      range = c(3, 6),
       trans = "sqrt"
     ) +
     ggplot2::guides(
       fill = ggplot2::guide_legend(override.aes = list(size = 4)),
       size = ggplot2::guide_legend(
-        override.aes = list(fill = "#7A8793", color = "white")
+        override.aes = list(
+          shape = 21,
+          fill = "#7A8793",
+          color = "#34434c",
+          alpha = 1,
+          stroke = 0.6
+        )
       )
     ) +
     ggplot2::labs(
@@ -419,7 +474,7 @@ make_pathway_ggplot <- function(pathways, active_pathway) {
       caption = paste0(
         "Independent scales; dotted baselines: GSEA NES = 0, ",
         "ORA fold enrichment = 1.\n",
-        "Color and shape = direction; point size = adjusted-P strength; ",
+        "Color and shape = direction; point size = -log10 adjusted P; ",
         "outline = selected pathway."
       )
     ) +
@@ -428,6 +483,10 @@ make_pathway_ggplot <- function(pathways, active_pathway) {
       panel.grid.major.y = ggplot2::element_blank(),
       panel.grid.minor = ggplot2::element_blank(),
       strip.text = ggplot2::element_text(face = "bold", hjust = 0),
+      plot.caption.position = "plot",
+      axis.text.y = ggplot2::element_text(size = 9),
+      legend.position = "bottom",
+      legend.box = "horizontal",
       plot.caption = ggplot2::element_text(
         color = "#52606D",
         hjust = 0,
@@ -450,9 +509,7 @@ pathway_detail_ui <- function(row, genes) {
       "overlapping genes in enrichment result"
     }
   )
-  exported_label <- if (
-    identical(as.character(data$source[[1L]]), "GSEA")
-  ) {
+  exported_label <- if (identical(as.character(data$source[[1L]]), "GSEA")) {
     "Exported leading-edge genes"
   } else {
     "Exported overlapping genes"
@@ -464,10 +521,12 @@ pathway_detail_ui <- function(row, genes) {
   htmltools::div(
     class = "pathway-detail",
     htmltools::h2(data$label[[1L]]),
-    htmltools::p(data$description[[1L]], class = "pathway-description"),
+    if (!identical(data$description[[1L]], data$label[[1L]])) {
+      htmltools::p(data$description[[1L]], class = "pathway-description")
+    },
     htmltools::tags$dl(
       htmltools::tags$dt("Direction"),
-      htmltools::tags$dd(as.character(data$direction[[1L]])),
+      htmltools::tags$dd(condition_label(data$direction[[1L]])),
       htmltools::tags$dt("Method"),
       htmltools::tags$dd(as.character(data$source[[1L]])),
       htmltools::tags$dt("Ontology"),
@@ -499,30 +558,21 @@ pathways_ui <- function(id) {
     htmltools::div(
       class = "page-heading",
       htmltools::div(
-        htmltools::p("Complete enrichment analysis", class = "eyebrow"),
         htmltools::h1("Pathways"),
         htmltools::p(
           paste(
-            "Top directional GSEA and ORA results from the primary condition",
-            "analysis are shown on method-specific score scales. The complete",
-            "enrichment results, including non-significant terms, are",
-            "available below."
+            "GO Biological Process enrichment · fixed primary condition analysis"
           ),
           class = "lede"
         )
       )
     ),
     bslib::layout_columns(
-      col_widths = c(7, 5, 12),
+      col_widths = c(12, 12, 12),
+      class = "pathways-layout",
       bslib::card(
         full_screen = TRUE,
         bslib::card_header("Top pathway results"),
-        htmltools::div(
-          role = "region",
-          `aria-label` = "Interactive pathway results",
-          `aria-describedby` = ns("pathway_plot_note"),
-          plotly::plotlyOutput(ns("pathway_plot"), height = "950px")
-        ),
         htmltools::p(
           id = ns("pathway_plot_note"),
           class = "small text-body-secondary px-3 pb-3 mb-0",
@@ -530,15 +580,31 @@ pathways_ui <- function(id) {
             "Each method shows the 10 terms with the lowest adjusted P",
             "values in each direction; a selected term outside that set is",
             "added to the plot.",
-            "GSEA uses NES (neutral = 0); ORA uses fold enrichment",
-            "(neutral = 1). Color and shape mark direction; point size",
-            "marks adjusted-P strength, and an outline marks the selected",
+            "Gene set enrichment analysis (GSEA) uses the normalized",
+            "enrichment score (NES; neutral = 0). Over-representation",
+            "analysis (ORA) uses fold enrichment (neutral = 1).",
+            "Color and shape mark direction; point size",
+            "marks −log10 adjusted P, and an outline marks the selected",
             "pathway.",
             "Click any point to inspect it."
           )
+        ),
+        shiny::uiOutput(ns("pathway_size_key")),
+        htmltools::p(
+          "Scroll horizontally to see the full figure.",
+          class = "narrow-plot-note supporting-copy"
+        ),
+        htmltools::div(
+          class = "pathway-plot-scroll",
+          role = "region",
+          tabindex = "0",
+          `aria-label` = "Interactive pathway results",
+          `aria-describedby` = ns("pathway_plot_note"),
+          plotly::plotlyOutput(ns("pathway_plot"), height = "1200px")
         )
       ),
       bslib::card(
+        class = "pathway-inspector",
         bslib::card_header("Pathway details"),
         shiny::selectizeInput(
           ns("pathway"),
@@ -552,12 +618,12 @@ pathways_ui <- function(id) {
           shiny::actionButton(
             ns("explore_pathway"),
             "Explore gene set",
-            class = "btn-primary w-100"
+            class = "btn-primary"
           ),
           shiny::actionButton(
             ns("add_pathway"),
             "Add to gene set",
-            class = "btn-outline-primary w-100"
+            class = "btn-outline-primary"
           )
         ),
         htmltools::div(
@@ -583,6 +649,20 @@ pathways_ui <- function(id) {
         col_widths = c(9, 3),
         bslib::card(
           bslib::card_header("Enrichment results"),
+          result_filter_ui(ns, pathways = TRUE),
+          shiny::uiOutput(ns("filter_status")),
+          htmltools::p(
+            "GSEA = gene set enrichment analysis; ORA = over-representation analysis. NES = normalized enrichment score. Sorted by adjusted P, then term. Counts refer to the source set for GSEA and overlap for ORA.",
+            class = "supporting-copy"
+          ),
+          htmltools::div(
+            class = "button-row",
+            shiny::downloadButton(ns("download_all"), "Complete results (CSV)"),
+            shiny::downloadButton(
+              ns("download_filtered"),
+              "Filtered results (CSV)"
+            )
+          ),
           DT::DTOutput(ns("pathway_table"))
         ),
         bslib::card(
@@ -610,7 +690,7 @@ pathways_server <- function(id, bundle, state, navigate_explore) {
         " — ",
         as.character(bundle$pathways$source),
         ", ",
-        as.character(bundle$pathways$direction)
+        condition_label(bundle$pathways$direction)
       )
     )
 
@@ -684,28 +764,43 @@ pathways_server <- function(id, bundle, state, navigate_explore) {
       DT::datatable(
         data,
         rownames = FALSE,
-        filter = "top",
         selection = "single",
         class = "compact stripe",
+        callback = DT::JS(
+          "table.table().node().dataset.rowSelectable = 'true';"
+        ),
         options = list(pageLength = 25L, lengthChange = FALSE, dom = "ftip")
       )
     })
 
+    filtered_pathways <- shiny::reactive(filter_result_rows(
+      bundle$pathways,
+      input$filter_direction,
+      input$filter_fdr,
+      input$filter_method,
+      input$filter_search
+    ))
+    output$filter_status <- shiny::renderUI(result_count_ui(
+      nrow(filtered_pathways()),
+      nrow(bundle$pathways)
+    ))
+    shiny::observeEvent(
+      input$reset_filters,
+      reset_result_filters(session, pathways = TRUE)
+    )
     output$pathway_table <- DT::renderDT({
-      DT::datatable(
-        bundle$pathways,
+      scientific_datatable(
+        pathway_table_data(filtered_pathways()),
         rownames = FALSE,
-        filter = "top",
         selection = "single",
-        class = "compact stripe",
         options = list(pageLength = 25L, lengthChange = FALSE, scrollX = TRUE)
       )
     })
 
     shiny::observeEvent(input$pathway_table_rows_selected, {
       row <- input$pathway_table_rows_selected
-      if (length(row) > 0L && row[[1L]] <= nrow(bundle$pathways)) {
-        state$active_pathway(as.character(bundle$pathways$pathway_id[[row[[
+      if (length(row) > 0L && row[[1L]] <= nrow(filtered_pathways())) {
+        state$active_pathway(as.character(filtered_pathways()$pathway_id[[row[[
           1L
         ]]]]))
       }
@@ -723,6 +818,20 @@ pathways_server <- function(id, bundle, state, navigate_explore) {
       genes <- active_genes()
       if (length(genes) > 0L) {
         replace_state_gene_set(state, bundle, genes)
+        state$gene_set_name(active_row()$label[[1L]])
+        state$requested_tab("By cluster")
+        shiny::showNotification(
+          paste(
+            "Loaded",
+            count_label(length(genes)),
+            "from",
+            active_row()$label[[1L]],
+            "·",
+            selection_description(bundle, state$selected_cells())
+          ),
+          type = "message",
+          duration = 8
+        )
         navigate_explore()
       }
     })
@@ -731,6 +840,80 @@ pathways_server <- function(id, bundle, state, navigate_explore) {
       genes <- active_genes()
       if (length(genes) > 0L) append_state_gene_set(state, bundle, genes)
     })
+
+    output$pathway_size_key <- shiny::renderUI({
+      strength <- prepare_pathway_plot_data(plotted_pathways())$evidence_strength
+      breaks <- pretty(range(strength), n = 3)
+      breaks <- breaks[breaks >= min(strength) & breaks <= max(strength)]
+      if (!length(breaks)) {
+        breaks <- mean(strength)
+      }
+      sizes <- pathway_marker_sizes(breaks, limits = range(sqrt(strength)))
+      htmltools::div(
+        class = "quantitative-key",
+        `aria-label` = "Point size: minus log10 adjusted P",
+        htmltools::strong("Point size · −log10 adjusted P"),
+        lapply(seq_along(breaks), function(i) {
+          htmltools::span(
+            class = "size-key-item",
+            htmltools::span(
+              class = "size-key-dot",
+              `aria-hidden` = "true",
+              style = paste0(
+                "width:",
+                sizes[[i]],
+                "px;height:",
+                sizes[[i]],
+                "px"
+              )
+            ),
+            format_number(breaks[[i]])
+          )
+        })
+      )
+    })
+    shiny::observe({
+      row <- active_row()
+      if (nrow(row) == 0L) {
+        return()
+      }
+      kind <- if (as.character(row$source[[1L]]) == "GSEA") {
+        "leading-edge genes"
+      } else {
+        "overlapping genes"
+      }
+      shiny::updateActionButton(
+        session,
+        "explore_pathway",
+        label = paste("Explore", length(active_genes()), kind)
+      )
+      session$sendCustomMessage(
+        "download-label",
+        list(id = session$ns("download_pathway"), label = paste(kind, "(TXT)"))
+      )
+    })
+    output$download_all <- shiny::downloadHandler(
+      filename = function() "espiviz-enrichment-complete.csv",
+      content = function(file) {
+        utils::write.csv(
+          label_result_conditions(bundle$pathways),
+          file,
+          row.names = FALSE,
+          na = ""
+        )
+      }
+    )
+    output$download_filtered <- shiny::downloadHandler(
+      filename = function() "espiviz-enrichment-filtered.csv",
+      content = function(file) {
+        utils::write.csv(
+          label_result_conditions(filtered_pathways()),
+          file,
+          row.names = FALSE,
+          na = ""
+        )
+      }
+    )
 
     output$download_pathway <- shiny::downloadHandler(
       filename = function() {
@@ -746,12 +929,16 @@ pathways_server <- function(id, bundle, state, navigate_explore) {
       content = function(file) {
         ggplot2::ggsave(
           file,
-          plot = make_pathway_ggplot(
-            plotted_pathways(),
-            state$active_pathway()
+          plot = figure_context(
+            make_pathway_ggplot(plotted_pathways(), state$active_pathway()),
+            bundle,
+            "GO Biological Process enrichment",
+            context = TRUE,
+            note = "Fixed inferential results. GSEA uses leading-edge genes; ORA uses overlapping genes.",
+            scope_text = "Fixed primary condition model"
           ),
           width = 9,
-          height = 11,
+          height = pathway_export_height(plotted_pathways()),
           dpi = 320,
           bg = "white"
         )
@@ -763,13 +950,17 @@ pathways_server <- function(id, bundle, state, navigate_explore) {
       content = function(file) {
         ggplot2::ggsave(
           file,
-          plot = make_pathway_ggplot(
-            plotted_pathways(),
-            state$active_pathway()
+          plot = figure_context(
+            make_pathway_ggplot(plotted_pathways(), state$active_pathway()),
+            bundle,
+            "GO Biological Process enrichment",
+            context = TRUE,
+            note = "Fixed inferential results. GSEA uses leading-edge genes; ORA uses overlapping genes.",
+            scope_text = "Fixed primary condition model"
           ),
           device = grDevices::cairo_pdf,
           width = 9,
-          height = 11,
+          height = pathway_export_height(plotted_pathways()),
           bg = "white"
         )
       }

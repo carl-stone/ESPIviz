@@ -24,14 +24,17 @@ prepare_plot_gene_data <- function(
     as.character(selected_cell_ids %||% character())
   )
 
-  data <- bundle$cells[, c(
-    "cell_id",
-    "umap_1",
-    "umap_2",
-    "cluster",
-    "condition",
-    "sample"
-  ), drop = FALSE]
+  data <- bundle$cells[,
+    c(
+      "cell_id",
+      "umap_1",
+      "umap_2",
+      "cluster",
+      "condition",
+      "sample"
+    ),
+    drop = FALSE
+  ]
   data$expression_1 <- as.numeric(expression[, 1L])
   data$detected_1 <- as.numeric(counts[, 1L]) > 0
   if (length(genes) == 2L) {
@@ -55,16 +58,19 @@ blend_palette <- function() {
   )
 }
 
-scale_expression_strength <- function(values) {
+scale_expression_strength <- function(
+  values,
+  detected = rep(TRUE, length(values))
+) {
   values <- as.numeric(values)
   result <- numeric(length(values))
-  index <- which(is.finite(values))
+  index <- which(is.finite(values) & detected)
   if (length(index) == 0L) {
     return(result)
   }
   limits <- range(values[index])
   if (diff(limits) <= .Machine$double.eps^0.5) {
-    result[index] <- as.numeric(limits[[1L]] > 0)
+    result[index] <- 0.5
     return(result)
   }
   result[index] <- (values[index] - limits[[1L]]) / diff(limits)
@@ -76,25 +82,29 @@ blend_rgb <- function(strength_1, strength_2, palette = blend_palette()) {
   gene_1 <- grDevices::col2rgb(palette[["Gene 1"]])[, 1L]
   gene_2 <- grDevices::col2rgb(palette[["Gene 2"]])[, 1L]
   both <- grDevices::col2rgb(palette[["Both detected"]])[, 1L]
-  colors <- vapply(seq_along(strength_1), function(index) {
-    first <- strength_1[[index]]
-    second <- strength_2[[index]]
-    total <- first + second
-    if (total <= 0) {
-      return(unname(palette[["Neither detected"]]))
-    }
-    target <- (gene_1 * first + gene_2 * second) / total
-    overlap <- min(first, second)
-    target <- target * (1 - overlap) + both * overlap
-    opacity <- max(first, second)
-    mixed <- neutral * (1 - opacity) + target * opacity
-    grDevices::rgb(
-      mixed[[1L]],
-      mixed[[2L]],
-      mixed[[3L]],
-      maxColorValue = 255
-    )
-  }, character(1L))
+  colors <- vapply(
+    seq_along(strength_1),
+    function(index) {
+      first <- strength_1[[index]]
+      second <- strength_2[[index]]
+      total <- first + second
+      if (total <= 0) {
+        return(unname(palette[["Neither detected"]]))
+      }
+      target <- (gene_1 * first + gene_2 * second) / total
+      overlap <- min(first, second)
+      target <- target * (1 - overlap) + both * overlap
+      opacity <- max(first, second)
+      mixed <- neutral * (1 - opacity) + target * opacity
+      grDevices::rgb(
+        mixed[[1L]],
+        mixed[[2L]],
+        mixed[[3L]],
+        maxColorValue = 255
+      )
+    },
+    character(1L)
+  )
   toupper(colors)
 }
 
@@ -107,8 +117,14 @@ prepare_umap_expression_blend_data <- function(gene_data) {
     )
   }
   data <- gene_data
-  data$strength_1 <- scale_expression_strength(data$expression_1)
-  data$strength_2 <- scale_expression_strength(data$expression_2)
+  data$strength_1 <- scale_expression_strength(
+    data$expression_1,
+    data$detected_1
+  )
+  data$strength_2 <- scale_expression_strength(
+    data$expression_2,
+    data$detected_2
+  )
   data$blend_strength <- data$strength_1 + data$strength_2
   data$blend_color <- blend_rgb(data$strength_1, data$strength_2)
   data <- data[order(data$blend_strength, data$cell_id), , drop = FALSE]
@@ -209,7 +225,13 @@ blend_legend_ui <- function(genes, mode = c("expression", "detection")) {
         ),
         htmltools::span(labels[[index]])
       )
-    })
+    }),
+    if (identical(mode, "expression")) {
+      htmltools::p(
+        blend_explanation(),
+        class = "blend-help supporting-copy"
+      )
+    }
   )
 }
 
@@ -243,12 +265,20 @@ make_violin_plot <- function(gene_data, bundle) {
   data$cluster <- factor(as.character(data$cluster), levels = clusters)
   palette <- discrete_palette(bundle, "cluster", clusters)
   selected <- data[data$selected, , drop = FALSE]
+  n <- ave(
+    rep(1L, nrow(data)),
+    interaction(data$gene, data$cluster),
+    FUN = length
+  )
+  large <- data[n >= 10L, , drop = FALSE]
+  small <- data[n < 10L, , drop = FALSE]
 
   plot <- ggplot2::ggplot(
     data,
     ggplot2::aes(x = cluster, y = expression, fill = cluster)
   ) +
     ggplot2::geom_violin(
+      data = large,
       scale = "width",
       trim = FALSE,
       linewidth = 0.3,
@@ -256,6 +286,7 @@ make_violin_plot <- function(gene_data, bundle) {
       alpha = 0.72
     ) +
     ggplot2::geom_boxplot(
+      data = large,
       width = 0.13,
       outlier.shape = NA,
       color = "#17232b",
@@ -269,30 +300,46 @@ make_violin_plot <- function(gene_data, bundle) {
       linewidth = 0.35,
       linetype = "dashed"
     )
+  if (nrow(small) > 0L) {
+    plot <- plot +
+      ggplot2::geom_point(
+        data = small,
+        size = 1.8,
+        position = ggplot2::position_jitter(width = 0.08, height = 0, seed = 1)
+      ) +
+      ggplot2::stat_summary(
+        data = small,
+        fun = stats::median,
+        geom = "point",
+        shape = 95,
+        size = 7
+      )
+  }
   if (nrow(selected) > 0L) {
-    plot <- plot + ggplot2::geom_point(
-      data = selected,
-      shape = 21,
-      size = 2,
-      stroke = 0.7,
-      color = "#111820",
-      fill = "#fffefb",
-      position = ggplot2::position_jitter(width = 0.08, height = 0)
-    )
+    plot <- plot +
+      ggplot2::geom_point(
+        data = selected,
+        shape = 21,
+        size = 2,
+        stroke = 0.7,
+        color = "#111820",
+        fill = "#fffefb",
+        position = ggplot2::position_jitter(width = 0.08, height = 0, seed = 1)
+      )
   }
   plot +
     ggplot2::facet_wrap(~gene, ncol = 1L) +
     ggplot2::scale_fill_manual(values = palette, guide = "none") +
     ggplot2::labs(
       x = "Final cluster",
-      y = "Log normalized expression",
+      y = "log normalized expression",
       caption = paste(
-        "Log normalized expression is centered and can be negative;",
+        "log normalized expression is centered and can be negative;",
         "detection uses raw counts.",
         "Outlined points are explicitly selected cells."
       )
     ) +
-    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme_minimal(base_size = 13) +
     ggplot2::theme(
       panel.grid.minor = ggplot2::element_blank(),
       panel.grid.major.x = ggplot2::element_blank(),
@@ -319,10 +366,9 @@ gene_pair_scope <- function(gene_data, group = "all") {
     group_rows <- as.character(gene_data$cluster) == group
     group_label <- paste("Cluster", group)
   }
-  included <- group_rows & (
-    as.logical(gene_data$detected_1) |
-      as.logical(gene_data$detected_2)
-  )
+  included <- group_rows &
+    (as.logical(gene_data$detected_1) |
+      as.logical(gene_data$detected_2))
   total_n <- sum(group_rows)
   included_n <- sum(included)
   list(
@@ -370,8 +416,7 @@ gene_pair_scope_ui <- function(scope) {
       excluded_label,
       " (",
       excluded_pct,
-      "%) to avoid the artificial diagonal created by their shared per-cell ",
-      "log normalized expression centering offset."
+      "%)."
     ),
     class = "supporting-copy gene-pair-scope",
     role = "status"
@@ -542,16 +587,18 @@ gene_pair_plotly_layout <- function(plot, genes, legend_title = NULL) {
   plotly::layout(
     plot,
     xaxis = list(
-      title = list(text = paste(genes[[1L]], "log normalized expression")),
+      title = list(text = paste0(genes[[1L]], "<br>log normalized expression")),
       zeroline = TRUE,
       zerolinecolor = "#aab2b7"
     ),
     yaxis = list(
-      title = list(text = paste(genes[[2L]], "log normalized expression")),
+      title = list(text = paste0(genes[[2L]], "<br>log normalized expression")),
       zeroline = TRUE,
       zerolinecolor = "#aab2b7"
     ),
-    legend = if (is.null(legend_title)) NULL else {
+    legend = if (is.null(legend_title)) {
+      NULL
+    } else {
       list(title = list(text = legend_title))
     },
     hovermode = "closest",
@@ -597,9 +644,9 @@ make_gene_pair_density_plotly <- function(
     type = "contour",
     source = source,
     name = paste("Density —", density$group_label),
-    colors = c("#f5f2ec", "#d69ab2", "#9d2857", "#17232b"),
+    colors = c("#f1f3f4", "#b8d8c6", "#14764f", "#20282c"),
     contours = list(coloring = "heatmap", showlabels = FALSE),
-    colorbar = list(title = list(text = "Cell density")),
+    colorbar = list(title = list(text = "Probability density")),
     hovertemplate = paste0(
       genes[[1L]],
       ": %{x:.3f}<br>",
@@ -642,7 +689,11 @@ make_gene_pair_plotly <- function(
   clusters <- sort(unique(as.character(data$cluster)))
   palette <- discrete_palette(bundle, "cluster", clusters)
   plot <- plotly::plot_ly(source = source)
-  trend <- prepare_gene_pair_loess(gene_data, group = loess_group)
+  trend <- if (identical(loess_group, "none")) {
+    empty_gene_pair_loess()
+  } else {
+    prepare_gene_pair_loess(gene_data, group = loess_group)
+  }
   trend_color <- if (identical(loess_group, "all")) {
     "#17232b"
   } else {
@@ -664,7 +715,7 @@ make_gene_pair_plotly <- function(
       fillcolor = plotly_alpha_color(trend_color, 0.18),
       line = list(color = "transparent"),
       hoverinfo = "skip",
-      showlegend = FALSE,
+      showlegend = TRUE,
       inherit = FALSE
     )
   }
@@ -677,13 +728,13 @@ make_gene_pair_plotly <- function(
       cluster,
       "<br>",
       genes[[1L]],
-      " Log normalized expression: ",
+      " log normalized expression: ",
       formatC(trace_data$expression_1, digits = 4L, format = "fg"),
       " (Raw detected: ",
       ifelse(trace_data$detected_1, "yes", "no"),
       ")<br>",
       genes[[2L]],
-      " Log normalized expression: ",
+      " log normalized expression: ",
       formatC(trace_data$expression_2, digits = 4L, format = "fg"),
       " (Raw detected: ",
       ifelse(trace_data$detected_2, "yes", "no"),
@@ -733,7 +784,7 @@ make_gene_pair_plotly <- function(
         ": %{y:.3f}<extra></extra>"
       ),
       inherit = FALSE,
-      showlegend = FALSE
+      showlegend = TRUE
     )
   }
   plot <- gene_pair_plotly_layout(
@@ -741,7 +792,7 @@ make_gene_pair_plotly <- function(
     genes,
     legend_title = "Final cluster"
   )
-  if (nrow(trend) == 0L) {
+  if (nrow(trend) == 0L && !identical(loess_group, "none")) {
     trend_group <- gene_pair_group_data(gene_data, group = loess_group)
     plot <- plotly::layout(
       plot,
@@ -862,15 +913,18 @@ prepare_comparison_table <- function(comparison, explicit_selection) {
     nrow(comparison) > 0L &&
     any(comparison$remaining_n > 0L, na.rm = TRUE)
   if (has_reference) {
-    return(comparison[, c(
-      "gene",
-      "selected_mean",
-      "selected_detected_pct",
-      "remaining_mean",
-      "remaining_detected_pct",
-      "mean_difference",
-      "detection_pp_difference"
-    ), drop = FALSE])
+    return(comparison[,
+      c(
+        "gene",
+        "selected_mean",
+        "selected_detected_pct",
+        "remaining_mean",
+        "remaining_detected_pct",
+        "mean_difference",
+        "detection_pp_difference"
+      ),
+      drop = FALSE
+    ])
   }
   data.frame(
     gene = as.character(comparison$gene),

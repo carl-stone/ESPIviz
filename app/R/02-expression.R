@@ -37,7 +37,10 @@ center_shifted_expression <- function(shifted, center) {
     return(as.numeric(shifted) - center)
   }
   if (nrow(shifted) != length(center)) {
-    stop("Shifted-matrix rows must match the scclrR center vector.", call. = FALSE)
+    stop(
+      "Shifted-matrix rows must match the scclrR center vector.",
+      call. = FALSE
+    )
   }
   sweep(as.matrix(shifted), 1L, center, "-")
 }
@@ -178,8 +181,12 @@ group_expression_summary <- function(expression, counts, groups, group_name) {
     names(empty)[[2L]] <- group_name
     return(empty)
   }
+  group_levels <- if (is.factor(groups)) {
+    levels(groups)
+  } else {
+    unique(as.character(groups))
+  }
   groups <- as.character(groups)
-  group_levels <- unique(groups)
   rows <- vector("list", length(group_levels) * ncol(expression))
   cursor <- 0L
   for (group in group_levels) {
@@ -192,10 +199,14 @@ group_expression_summary <- function(expression, counts, groups, group_name) {
         gene = colnames(expression)[[gene_index]],
         group = group,
         cell_count = length(index),
-        mean_expression = mean(values),
-        median_expression = stats::median(values),
+        mean_expression = if (length(index)) mean(values) else NA_real_,
+        median_expression = if (length(index)) {
+          stats::median(values)
+        } else {
+          NA_real_
+        },
         detected_n = sum(raw > 0),
-        detected_pct = 100 * mean(raw > 0),
+        detected_pct = if (length(index)) 100 * mean(raw > 0) else NA_real_,
         stringsAsFactors = FALSE
       )
     }
@@ -325,7 +336,10 @@ summarize_selection <- function(
         by_sample_chunks[[chunk_number]] <- group_expression_summary(
           selected_expression,
           selected_counts,
-          selected_cells$sample,
+          factor(
+            selected_cells$sample,
+            levels = unique(as.character(bundle$cells$sample))
+          ),
           "sample"
         )
       }
@@ -482,6 +496,8 @@ write_selection_expression_export <- function(
   names(centers) <- bundle$cells$cell_id[cell_index]
   export <- list(
     schema_version = ESPIVIZ_SCHEMA_VERSION,
+    data_version = bundle$data_version,
+    bundle_sha256 = bundle_identity(bundle)$sha256,
     normalization = paste(
       "scclrR PFlog (target = 'auto', log1p = TRUE, center = TRUE);",
       "dense expression = shifted sparse value - cell center"

@@ -11,6 +11,37 @@ casefold_key <- function(x) {
   tolower(enc2utf8(as.character(x)))
 }
 
+condition_label <- function(x) {
+  labels <- c(
+    "Control" = "p27CKO",
+    "control" = "p27CKO",
+    "E-Stim" = "p27CKO + E-Stim",
+    "estim" = "p27CKO + E-Stim",
+    "p27CKOEStim" = "p27CKO + E-Stim",
+    "p27CKO +EStim" = "p27CKO + E-Stim"
+  )
+  values <- as.character(x)
+  matched <- match(values, names(labels))
+  values[!is.na(matched)] <- unname(labels[matched[!is.na(matched)]])
+  values
+}
+
+sample_label <- function(x) {
+  x <- sub("_p27CKOEStim$", " · p27CKO + E-Stim", as.character(x))
+  sub("_p27CKO$", " · p27CKO", x)
+}
+
+label_result_conditions <- function(data) {
+  for (column in intersect(c("condition", "direction"), names(data))) {
+    data[[column]] <- condition_label(data[[column]])
+  }
+  if ("contrast" %in% names(data)) {
+    data$contrast[data$contrast == "estim_vs_control"] <-
+      "p27CKO + E-Stim vs p27CKO"
+  }
+  data
+}
+
 safe_ratio <- function(numerator, denominator) {
   ifelse(
     is.finite(denominator) & denominator != 0,

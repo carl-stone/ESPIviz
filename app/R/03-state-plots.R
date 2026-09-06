@@ -20,6 +20,10 @@ new_app_state <- function(bundle) {
     active_gene = shiny::reactiveVal(default_active_gene(bundle)),
     gene_set = shiny::reactiveVal(character()),
     selected_cells = shiny::reactiveVal(character()),
+    gene_set_name = shiny::reactiveVal(NULL),
+    view_options = shiny::reactiveVal(view_option_defaults()),
+    restore = shiny::reactiveVal(NULL),
+    requested_tab = shiny::reactiveVal(NULL),
     active_pathway = shiny::reactiveVal(
       if (nrow(bundle$pathways) > 0L) {
         as.character(bundle$pathways$pathway_id[[1L]])
@@ -32,8 +36,11 @@ new_app_state <- function(bundle) {
 
 state_analysis_genes <- function(state) {
   shiny::reactive({
-    genes <- state$gene_set()
-    if (length(genes) == 0L) state$active_gene() else genes
+    analysis_gene_scope(
+      state$active_gene(),
+      state$view_options()$secondary_gene,
+      state$gene_set()
+    )
   })
 }
 
@@ -56,6 +63,7 @@ set_state_gene <- function(state, bundle, gene, add_to_set = FALSE) {
 replace_state_gene_set <- function(state, bundle, genes) {
   parsed <- parse_gene_input(genes, bundle_gene_names(bundle))
   state$gene_set(parsed$genes)
+  state$gene_set_name(NULL)
   if (length(parsed$genes) > 0L) {
     state$active_gene(parsed$genes[[1L]])
   }
@@ -64,22 +72,18 @@ replace_state_gene_set <- function(state, bundle, genes) {
 
 append_state_gene_set <- function(state, bundle, genes) {
   parsed <- parse_gene_input(genes, bundle_gene_names(bundle))
-  combined <- c(state$gene_set(), parsed$genes)
+  before <- state$gene_set()
+  combined <- c(before, parsed$genes)
   combined <- combined[!duplicated(casefold_key(combined))]
   state$gene_set(combined)
+  if (!identical(before, combined)) {
+    state$gene_set_name(NULL)
+  }
   invisible(parsed)
 }
 
-expression_palette <- function(bundle) {
-  palette <- unlist(
-    bundle$palette$expression %||% bundle$palette$gene,
-    use.names = TRUE
-  )
-  if (length(palette) >= 2L) {
-    unname(palette)
-  } else {
-    c("#d9e4ed", "#8f7ca8", "#b52865")
-  }
+expression_palette <- function(bundle = NULL) {
+  grDevices::hcl.colors(9L, "Cividis")
 }
 
 expression_color_limit <- function(values) {
@@ -91,6 +95,13 @@ expression_color_limit <- function(values) {
 
 discrete_palette <- function(bundle, field, values) {
   configured <- unlist(bundle$palette[[field]] %||% list(), use.names = TRUE)
+  if (identical(field, "condition")) {
+    configured <- c(
+      "p27CKO" = "#2865a0",
+      "p27CKO +EStim" = "#bf5700",
+      "p27CKO + E-Stim" = "#bf5700"
+    )
+  }
   values <- unique(as.character(values))
   fallback <- grDevices::hcl.colors(max(3L, length(values)), "Dark 3")
   names(fallback) <- values
@@ -131,8 +142,8 @@ umap_plot_data <- function(bundle, color_by, gene) {
     cells$color_label <- "Cluster"
   } else {
     cells$color_value <- factor(
-      as.character(cells$condition),
-      levels = unique(as.character(cells$condition))
+      condition_label(cells$condition),
+      levels = unique(condition_label(cells$condition))
     )
     cells$color_label <- "Condition"
   }
@@ -270,18 +281,18 @@ make_umap_plotly <- function(
     "<br>Cluster: ",
     data$cluster,
     "<br>Condition: ",
-    data$condition
+    condition_label(data$condition)
   )
   if (expression_blend_mode) {
     hover <- paste0(
       hover,
       "<br>",
       genes[[1L]],
-      " Log normalized expression: ",
+      " log normalized expression: ",
       formatC(data$expression_1, digits = 4L, format = "fg"),
       "<br>",
       genes[[2L]],
-      " Log normalized expression: ",
+      " log normalized expression: ",
       formatC(data$expression_2, digits = 4L, format = "fg")
     )
   } else if (detection_blend_mode) {
@@ -333,7 +344,7 @@ make_umap_plotly <- function(
       hover,
       "<br>",
       genes[[1L]],
-      " Log normalized expression: ",
+      " log normalized expression: ",
       formatC(data$color_value, digits = 4L, format = "fg")
     )
     plot <- plotly::plot_ly(
@@ -362,8 +373,15 @@ make_umap_plotly <- function(
       plot,
       title = list(
         text = paste(genes[[1L]], "log normalized expression"),
-        side = "right"
+        side = "top"
       ),
+      orientation = "h",
+      x = 0.5,
+      xanchor = "center",
+      y = -0.25,
+      yanchor = "top",
+      len = 0.9,
+      thickness = 12,
       limits = c(-color_limit, color_limit)
     )
   } else {
@@ -448,6 +466,9 @@ make_umap_plotly <- function(
   plot <- plotly::layout(
     plot,
     dragmode = "lasso",
+    font = list(family = "Arial, sans-serif", size = 13, color = "#20282c"),
+    paper_bgcolor = "#ffffff",
+    plot_bgcolor = "#ffffff",
     xaxis = list(title = "UMAP 1", zeroline = FALSE, showgrid = FALSE),
     yaxis = list(
       title = "UMAP 2",
@@ -456,7 +477,7 @@ make_umap_plotly <- function(
       scaleanchor = "x",
       scaleratio = 1
     ),
-    margin = list(l = 54, r = 18, t = 20, b = 48),
+    margin = list(l = 54, r = 18, t = 20, b = 120),
     hovermode = "closest",
     legend = list(orientation = "h", y = -0.15)
   )
@@ -524,7 +545,8 @@ make_umap_ggplot <- function(
         "; blue: high ",
         genes[[2L]],
         "; purple: high both. Each gene's log normalized expression is ",
-        "scaled independently from its minimum to maximum across cells."
+        "scaled independently among detected cells. Undetected genes contribute zero; ",
+        "double-negative cells are neutral. Constant detected values use mid intensity. This is not an expression ratio."
       )
     } else {
       paste0(
@@ -538,18 +560,14 @@ make_umap_ggplot <- function(
   } else if (identical(color_by, "expression")) {
     colors <- expression_palette(bundle)
     color_limit <- expression_color_limit(data$color_value)
-    middle_color <- colors[[ceiling(length(colors) / 2)]]
     plot <- plot +
       ggplot2::geom_point(
         ggplot2::aes(color = color_value),
         size = point_style$static_size,
         alpha = point_style$static_opacity
       ) +
-      ggplot2::scale_color_gradient2(
-        low = colors[[1L]],
-        mid = middle_color,
-        high = colors[[length(colors)]],
-        midpoint = 0,
+      ggplot2::scale_color_gradientn(
+        colours = colors,
         limits = c(-color_limit, color_limit),
         name = paste(genes[[1L]], "log normalized expression")
       )
@@ -604,7 +622,7 @@ make_umap_ggplot <- function(
   plot +
     ggplot2::coord_equal() +
     ggplot2::labs(x = "UMAP 1", y = "UMAP 2", caption = caption) +
-    ggplot2::theme_minimal(base_family = "sans", base_size = 11) +
+    ggplot2::theme_minimal(base_family = "sans", base_size = 13) +
     ggplot2::theme(
       panel.grid = ggplot2::element_blank(),
       legend.position = if (
@@ -700,6 +718,11 @@ summary_violin_plot_data <- function(data, group_by) {
       "All cells"
     }
   } else {
+    all_groups <- if (is.factor(data[[group_by]])) {
+      levels(data[[group_by]])
+    } else {
+      unique(as.character(data[[group_by]]))
+    }
     if (has_selection) {
       data <- data[data$selected, , drop = FALSE]
     }
@@ -712,9 +735,9 @@ summary_violin_plot_data <- function(data, group_by) {
         sort(unique(groups))
       }
     } else if (is.factor(data[[group_by]])) {
-      group_levels <- intersect(levels(data[[group_by]]), unique(groups))
+      group_levels <- levels(data[[group_by]])
     } else {
-      group_levels <- unique(groups)
+      group_levels <- all_groups
     }
   }
 
@@ -727,10 +750,8 @@ summary_violin_columns <- function(gene_count) {
   gene_count <- max(0L, as.integer(gene_count %||% 0L))
   if (gene_count <= 1L) {
     1L
-  } else if (gene_count <= 8L) {
-    2L
   } else {
-    3L
+    2L
   }
 }
 
@@ -752,23 +773,43 @@ make_summary_violin_plot <- function(
     return(NULL)
   }
   gene_count <- length(unique(as.character(data$gene)))
-  groups <- levels(droplevels(data$group))
-  palette <- if (
-    !is.null(bundle) && group_by %in% c("condition", "cluster")
-  ) {
-    discrete_palette(bundle, group_by, groups)
-  } else {
-    fallback <- grDevices::hcl.colors(max(3L, length(groups)), "Dark 3")
-    stats::setNames(fallback[seq_along(groups)], groups)
+  groups <- levels(data$group)
+  palette <- stats::setNames(rep("#14764f", length(groups)), groups)
+  group_counts <- vapply(
+    groups,
+    function(group) {
+      length(unique(data$cell_id[as.character(data$group) == group]))
+    },
+    integer(1L)
+  )
+  group_labels <- groups
+  if (identical(group_by, "sample")) {
+    group_labels <- sample_label(group_labels)
+  } else if (identical(group_by, "condition")) {
+    group_labels <- condition_label(group_labels)
   }
+  group_labels <- stats::setNames(
+    paste0(
+      group_labels,
+      "  (",
+      ifelse(
+        group_counts == 0L,
+        "0 selected cells",
+        paste0("n=", format(group_counts, big.mark = ",", trim = TRUE))
+      ),
+      ")"
+    ),
+    groups
+  )
+  data$group <- factor(data$group, levels = rev(groups))
   density_group <- interaction(data$gene, data$group, drop = TRUE)
   density_n <- ave(
     rep.int(1L, nrow(data)),
     density_group,
     FUN = length
   )
-  violin_data <- data[density_n >= 2L, , drop = FALSE]
-  singleton_data <- data[density_n < 2L, , drop = FALSE]
+  violin_data <- data[density_n >= 10L, , drop = FALSE]
+  singleton_data <- data[density_n < 10L, , drop = FALSE]
 
   plot <- ggplot2::ggplot(
     data,
@@ -780,14 +821,15 @@ make_summary_violin_plot <- function(
       trim = FALSE,
       linewidth = 0.3,
       color = "#42515a",
-      alpha = 0.72,
+      alpha = 0.28,
       na.rm = TRUE
     ) +
     ggplot2::geom_boxplot(
+      data = violin_data,
       width = 0.13,
       outlier.shape = NA,
       color = "#17232b",
-      fill = "#fffefb",
+      fill = "#ffffff",
       alpha = 0.78,
       linewidth = 0.32,
       na.rm = TRUE
@@ -799,15 +841,28 @@ make_summary_violin_plot <- function(
       linetype = "dashed"
     )
   if (nrow(singleton_data) > 0L) {
-    plot <- plot + ggplot2::geom_point(
-      data = singleton_data,
-      shape = 21,
-      size = 2.4,
-      stroke = 0.5,
-      color = "#17232b"
-    )
+    plot <- plot +
+      ggplot2::geom_point(
+        data = singleton_data,
+        position = ggplot2::position_jitter(width = 0.08, height = 0, seed = 1),
+        shape = 21,
+        size = 2.4,
+        stroke = 0.5,
+        color = "#17232b"
+      )
   }
 
+  if (nrow(singleton_data) > 0L) {
+    plot <- plot +
+      ggplot2::stat_summary(
+        data = singleton_data,
+        fun = stats::median,
+        geom = "point",
+        shape = 95,
+        size = 7,
+        color = "#17232b"
+      )
+  }
   plot +
     ggplot2::facet_wrap(
       ~gene,
@@ -815,25 +870,23 @@ make_summary_violin_plot <- function(
     ) +
     ggplot2::scale_fill_manual(
       values = palette,
-      guide = if (length(groups) > 1L) "legend" else "none"
+      guide = "none"
     ) +
+    ggplot2::scale_x_discrete(labels = group_labels, drop = FALSE) +
+    ggplot2::coord_flip() +
     ggplot2::labs(
       x = group_label,
-      y = "Log normalized expression",
+      y = "log normalized expression",
       fill = group_label %||% "Cell group"
     ) +
-    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme_minimal(base_size = 15) +
     ggplot2::theme(
       panel.grid.minor = ggplot2::element_blank(),
       panel.grid.major.x = ggplot2::element_blank(),
       legend.position = "top",
       legend.justification = "left",
-      axis.text.x = ggplot2::element_text(
-        face = "bold",
-        color = "#17232b",
-        angle = if (isTRUE(rotate_x)) 30 else 0,
-        hjust = if (isTRUE(rotate_x)) 1 else 0.5
-      ),
+      axis.text = ggplot2::element_text(size = 12, color = "#20282c"),
+      axis.text.x = ggplot2::element_text(angle = 0, hjust = 0.5),
       strip.text = ggplot2::element_text(face = "bold", color = "#17232b"),
       plot.background = ggplot2::element_rect(fill = "white", color = NA)
     )
@@ -911,7 +964,7 @@ comparison_plot_height <- function(gene_count) {
   as.integer(max(300L, min(680L, 180L + 20L * gene_count)))
 }
 
-make_gene_comparison_plot <- function(comparison) {
+make_gene_comparison_plot <- function(comparison, color_limit = NULL) {
   long <- comparison_plot_data(comparison)
   if (nrow(long) == 0L) {
     return(NULL)
@@ -922,10 +975,15 @@ make_gene_comparison_plot <- function(comparison) {
     levels = c("All cells", "Selected cells", "Remaining cells")
   )
 
-  make_expression_dot_plot(long, group_label = NULL)
+  make_expression_dot_plot(long, group_label = NULL, color_limit = color_limit)
 }
 
-make_expression_dot_plot <- function(data, group_label, rotate_x = FALSE) {
+make_expression_dot_plot <- function(
+  data,
+  group_label,
+  rotate_x = FALSE,
+  color_limit = NULL
+) {
   if (nrow(data) == 0L) {
     return(NULL)
   }
@@ -935,7 +993,7 @@ make_expression_dot_plot <- function(data, group_label, rotate_x = FALSE) {
   if (!is.factor(data$group)) {
     data$group <- factor(data$group, levels = unique(data$group))
   }
-  color_limit <- expression_color_limit(data$mean_expression)
+  color_limit <- color_limit %||% expression_color_limit(data$mean_expression)
 
   ggplot2::ggplot(
     data,
@@ -947,15 +1005,23 @@ make_expression_dot_plot <- function(data, group_label, rotate_x = FALSE) {
     )
   ) +
     ggplot2::geom_point(alpha = 0.92, na.rm = TRUE) +
-    ggplot2::scale_color_gradient2(
-      low = "#2166AC",
-      mid = "#BDBDBD",
-      high = "#E31A8C",
-      midpoint = 0,
+    ggplot2::scale_x_discrete(labels = function(x) {
+      sample_label(condition_label(x))
+    }) +
+    ggplot2::geom_point(
+      data = data[is.na(data$detected_pct), , drop = FALSE],
+      ggplot2::aes(x = group, y = gene),
+      inherit.aes = FALSE,
+      shape = 4,
+      size = 2.5,
+      color = "#69757c"
+    ) +
+    ggplot2::scale_color_gradientn(
+      colours = expression_palette(),
       limits = c(-color_limit, color_limit)
     ) +
-    ggplot2::scale_size_continuous(
-      range = c(2, 9),
+    ggplot2::scale_size_area(
+      max_size = 9,
       limits = c(0, 100),
       breaks = c(0, 50, 100)
     ) +
@@ -969,11 +1035,16 @@ make_expression_dot_plot <- function(data, group_label, rotate_x = FALSE) {
     ggplot2::labs(
       x = group_label,
       y = NULL,
-      color = "Mean log normalized expression",
+      color = "Mean log normalized\nexpression",
       size = "Detected (%)"
     ) +
     ggplot2::guides(
-      size = ggplot2::guide_legend(order = 1L, nrow = 1L),
+      size = ggplot2::guide_legend(
+        order = 1L,
+        nrow = 1L,
+        title.position = "top",
+        label.position = "bottom"
+      ),
       color = ggplot2::guide_colorbar(
         order = 2L,
         direction = "horizontal",
@@ -982,7 +1053,7 @@ make_expression_dot_plot <- function(data, group_label, rotate_x = FALSE) {
         barheight = grid::unit(0.25, "cm")
       )
     ) +
-    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme_minimal(base_size = 15) +
     ggplot2::theme(
       panel.grid.major.y = ggplot2::element_line(color = "#e8ecef"),
       panel.grid.minor = ggplot2::element_blank(),
@@ -1003,10 +1074,16 @@ make_group_summary_plot <- function(
   summary,
   group_column,
   group_label,
-  rotate_x = FALSE
+  rotate_x = FALSE,
+  color_limit = NULL
 ) {
   data <- group_summary_plot_data(summary, group_column)
-  make_expression_dot_plot(data, group_label, rotate_x = rotate_x)
+  make_expression_dot_plot(
+    data,
+    group_label,
+    rotate_x = rotate_x,
+    color_limit = color_limit
+  )
 }
 
 prepare_marker_overview <- function(
@@ -1077,10 +1154,14 @@ prepare_marker_overview <- function(
     }
   )
   result$cluster <- as.character(result$cluster)
-  result <- result[order(
-    result$marker_rank,
-    match(result$cluster, sort(unique(result$cluster)))
-  ), , drop = FALSE]
+  result <- result[
+    order(
+      result$marker_rank,
+      match(result$cluster, sort(unique(result$cluster)))
+    ),
+    ,
+    drop = FALSE
+  ]
   rownames(result) <- NULL
   result
 }
@@ -1117,10 +1198,11 @@ make_marker_overview_plot <- function(data) {
     ggplot2::geom_point(alpha = 0.94, na.rm = TRUE) +
     ggplot2::scale_color_gradientn(
       colors = c("#e4ebef", "#8b86aa", "#9d2857"),
-      limits = c(0, 1)
+      limits = c(0, 1),
+      breaks = c(0, 0.5, 1)
     ) +
-    ggplot2::scale_size_continuous(
-      range = c(2, 9),
+    ggplot2::scale_size_area(
+      max_size = 9,
       limits = c(0, 100),
       breaks = c(0, 50, 100)
     ) +
@@ -1130,7 +1212,22 @@ make_marker_overview_plot <- function(data) {
       color = "Relative mean\n(within gene)",
       size = "Detected (%)"
     ) +
-    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::guides(
+      size = ggplot2::guide_legend(
+        order = 1L,
+        nrow = 1L,
+        title.position = "top",
+        label.position = "bottom"
+      ),
+      color = ggplot2::guide_colorbar(
+        order = 2L,
+        direction = "horizontal",
+        title.position = "top",
+        barwidth = grid::unit(3.5, "cm"),
+        barheight = grid::unit(0.25, "cm")
+      )
+    ) +
+    ggplot2::theme_minimal(base_size = 15) +
     ggplot2::theme(
       panel.grid.major = ggplot2::element_line(color = "#e8ecef"),
       panel.grid.minor = ggplot2::element_blank(),
@@ -1184,7 +1281,10 @@ make_cluster_composition_plot <- function(data, bundle) {
     return(NULL)
   }
   condition_levels <- unique(as.character(bundle$cells$condition))
-  data$condition <- factor(as.character(data$condition), levels = condition_levels)
+  data$condition <- factor(
+    as.character(data$condition),
+    levels = condition_levels
+  )
   data$tile_label <- paste0(
     format(data$cell_count, big.mark = ","),
     "\n",
@@ -1202,7 +1302,7 @@ make_cluster_composition_plot <- function(data, bundle) {
     ggplot2::geom_text(
       ggplot2::aes(label = tile_label, color = text_color),
       lineheight = 0.92,
-      size = 3,
+      size = 3.6,
       show.legend = FALSE
     ) +
     ggplot2::scale_color_identity() +
@@ -1213,8 +1313,10 @@ make_cluster_composition_plot <- function(data, bundle) {
     ggplot2::facet_grid(
       cols = ggplot2::vars(condition),
       scales = "free_x",
-      space = "free_x"
+      space = "free_x",
+      labeller = ggplot2::labeller(condition = condition_label)
     ) +
+    ggplot2::scale_x_discrete(labels = sample_label) +
     ggplot2::labs(
       x = "Biological sample",
       y = "Final cluster",
@@ -1224,7 +1326,7 @@ make_cluster_composition_plot <- function(data, bundle) {
         sep = ""
       )
     ) +
-    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme_minimal(base_size = 15) +
     ggplot2::theme(
       panel.grid = ggplot2::element_blank(),
       panel.spacing.x = grid::unit(0.8, "lines"),
