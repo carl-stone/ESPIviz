@@ -35,9 +35,13 @@ wrap_caption <- function(text, width = 100L) {
   )
 }
 
-view_option_defaults <- function() {
+view_option_defaults <- function(bundle = NULL) {
   list(
-    secondary_gene = "",
+    secondary_gene = if (is.null(bundle)) {
+      ""
+    } else {
+      canonical_gene(bundle, "Ascl1", fallback = "")
+    },
     color_by = "expression",
     explore_results = "By cluster",
     gene_page = 1L,

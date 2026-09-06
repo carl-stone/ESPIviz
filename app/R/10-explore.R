@@ -830,7 +830,7 @@ explore_server <- function(id, bundle, state) {
       show_selection_comparison()
     })
     shiny::observe({
-      defaults <- view_option_defaults()
+      defaults <- view_option_defaults(bundle)
       values <- lapply(names(defaults), function(key) {
         input[[key]] %||% defaults[[key]]
       })
@@ -982,7 +982,7 @@ explore_server <- function(id, bundle, state) {
           "No second gene" = "",
           stats::setNames(universe, universe)
         ),
-        selected = "",
+        selected = view_option_defaults(bundle)$secondary_gene,
         server = TRUE
       )
     })

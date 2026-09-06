@@ -11,7 +11,7 @@ canonical_gene <- function(bundle, gene, fallback = NULL) {
 
 default_active_gene <- function(bundle) {
   featured <- unlist(bundle$featured_gene_sets, use.names = FALSE)
-  preferred <- c("Glul", "EGFP", featured, bundle_gene_names(bundle))
+  preferred <- c("Rlbp1", "Glul", "EGFP", featured, bundle_gene_names(bundle))
   canonical_gene(bundle, preferred, bundle_gene_names(bundle)[[1L]])
 }
 
@@ -21,7 +21,7 @@ new_app_state <- function(bundle) {
     gene_set = shiny::reactiveVal(character()),
     selected_cells = shiny::reactiveVal(character()),
     gene_set_name = shiny::reactiveVal(NULL),
-    view_options = shiny::reactiveVal(view_option_defaults()),
+    view_options = shiny::reactiveVal(view_option_defaults(bundle)),
     restore = shiny::reactiveVal(NULL),
     requested_tab = shiny::reactiveVal(NULL),
     active_pathway = shiny::reactiveVal(

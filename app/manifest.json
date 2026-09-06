@@ -2502,13 +2502,13 @@
       "checksum": "16f9745b906737ef6b0c70124451c7e3"
     },
     "R/03-state-plots.R": {
-      "checksum": "1e7a935a8191e1413f48ce0edb48ccc9"
+      "checksum": "c81890797cd120fee30c1dde59081095"
     },
     "R/04-cell-level.R": {
       "checksum": "5ef9f38d6f06069a85b8a4056328d6b6"
     },
     "R/05-view-contract.R": {
-      "checksum": "fe08762ed84236e5bd6b5d31d2b3f01e"
+      "checksum": "cbb49b10226ea656b77140fdb04d6d88"
     },
     "R/06-result-tables.R": {
       "checksum": "db911599d9b3ebe3306eb447163a81b4"
@@ -2517,7 +2517,7 @@
       "checksum": "5c0f14cf488505f17aba4457172ebb1a"
     },
     "R/10-explore.R": {
-      "checksum": "1dc72f17afe4896f2ee152567a19bf64"
+      "checksum": "accf56565f574c8791a9426485a0b58e"
     },
     "R/20-differential-expression.R": {
       "checksum": "8a84615cf1e8656d67d6d5a4b5795b93"
