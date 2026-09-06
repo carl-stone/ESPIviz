@@ -3,11 +3,11 @@ ESPIVIZ_SCHEMA_VERSION <- "1.1.0"
 ESPIVIZ_PRODUCTION_EXPECTED <- list(
   schema_version = ESPIVIZ_SCHEMA_VERSION,
   genes = 38394L,
-  cells = 3456L,
-  clusters = 8L,
-  de_rows = 24601L,
+  cells = 3238L,
+  clusters = 5L,
+  de_rows = 17043L,
   reduction = "umap_pflog_mg_selected_no_filter_cc_dims20",
-  cluster_column = "cluster_pflog_mg_selected_no_filter_cc_dims20_res0.5"
+  cluster_column = "cluster_pflog_mg_selected_no_filter_cc_dims20_res0.3"
 )
 
 bundle_gene_names <- function(bundle) {
@@ -330,7 +330,7 @@ validate_bundle <- function(bundle, expected = NULL) {
       any(bundle$primary_de$mean_count_estim < 0) ||
       !identical(
         unique(as.character(bundle$primary_de$design)),
-        "primary_unpaired_condition"
+        "unpaired_condition"
       )
   ) {
     stop("The primary differential-expression table is invalid.", call. = FALSE)

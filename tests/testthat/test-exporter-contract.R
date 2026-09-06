@@ -72,14 +72,14 @@ test_that("exporter pins the frozen structural source contract", {
   )
   expect_identical(
     contract$cluster_column,
-    "cluster_pflog_mg_selected_no_filter_cc_dims20_res0.5"
+    "cluster_pflog_mg_selected_no_filter_cc_dims20_res0.3"
   )
   expect_identical(contract$genes, 38394L)
-  expect_identical(contract$cells, 3456L)
-  expect_identical(contract$clusters, as.character(1:8))
-  expect_identical(contract$primary_de_rows, 24601L)
-  expect_identical(contract$primary_de_design, "primary_unpaired_condition")
-  expect_identical(contract$data_version, "1.2.0")
+  expect_identical(contract$cells, 3238L)
+  expect_identical(contract$clusters, as.character(1:5))
+  expect_identical(contract$primary_de_rows, 17043L)
+  expect_identical(contract$primary_de_design, "unpaired_condition")
+  expect_identical(contract$data_version, "1.3.0")
 })
 
 test_that("source-manifest example requires one complete source hash", {
@@ -525,6 +525,25 @@ test_that("source extraction does not require a Seurat normalized data layer", {
   expect_silent(
     espiviz_extract_source(object, synthetic_source_contract())
   )
+})
+
+test_that("source extraction preserves the requested cluster IDs over active identities", {
+  object <- make_synthetic_seurat_source()
+  contract <- synthetic_source_contract()
+  contract$cluster_column <- espiviz_contract()$cluster_column
+  object[[contract$cluster_column]] <- c("2", "1", "2", "1")
+  object$cluster_pflog_mg_selected_no_filter_cc_dims20_res0.5 <-
+    c("1", "1", "2", "2")
+  SeuratObject::Idents(object) <-
+    "cluster_pflog_mg_selected_no_filter_cc_dims20_res0.5"
+
+  extracted <- espiviz_extract_source(object, contract)
+
+  expect_identical(extracted$cells$cluster, c(2L, 1L, 2L, 1L))
+  expect_false(identical(
+    extracted$cells$cluster,
+    as.integer(as.character(SeuratObject::Idents(object)))
+  ))
 })
 
 test_that("build-data script can be sourced without executing the CLI", {

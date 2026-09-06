@@ -112,7 +112,7 @@ test_that("bundle validation rejects schema and primary-result drift", {
   wrong_de$primary_de <- wrong_de$primary_de[-1, , drop = FALSE]
   expect_error(
     validate_bundle(wrong_de, expected = expected),
-    "24,601|24601|differential|DE|row",
+    "differential|DE|row",
     ignore.case = TRUE
   )
 

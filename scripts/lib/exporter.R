@@ -18,15 +18,15 @@ espiviz_require <- function(package) {
 espiviz_contract <- function() {
   list(
     schema_version = "1.1.0",
-    data_version = "1.2.0",
+    data_version = "1.3.0",
     reduction = "umap_pflog_mg_selected_no_filter_cc_dims20",
-    cluster_column = "cluster_pflog_mg_selected_no_filter_cc_dims20_res0.5",
+    cluster_column = "cluster_pflog_mg_selected_no_filter_cc_dims20_res0.3",
     genes = 38394L,
-    cells = 3456L,
-    clusters = as.character(seq_len(8L)),
+    cells = 3238L,
+    clusters = as.character(seq_len(5L)),
     conditions = c("p27CKO", "p27CKO +EStim"),
-    primary_de_rows = 24601L,
-    primary_de_design = "primary_unpaired_condition",
+    primary_de_rows = 17043L,
+    primary_de_design = "unpaired_condition",
     primary_de_contrast = "estim_vs_control",
     top_markers_per_cluster = 25L
   )
@@ -452,7 +452,7 @@ espiviz_read_markers <- function(path, genes, contract = espiviz_contract()) {
   cluster <- as.character(data$cluster)
   if (!identical(sort(unique(cluster)), contract$clusters)) {
     espiviz_abort(
-      "Marker table does not contain exactly the eight final clusters."
+      "Marker table cluster IDs do not match the source contract."
     )
   }
   if (anyNA(data$gene) || any(!data$gene %in% genes)) {
@@ -1138,7 +1138,7 @@ espiviz_validate_public_bundle <- function(
       )
     }
     if (length(unique(bundle$cells$cluster)) != length(contract$clusters)) {
-      espiviz_abort("Bundle does not contain exactly eight clusters.")
+      espiviz_abort("Bundle cluster count does not match the source contract.")
     }
     if (
       !identical(

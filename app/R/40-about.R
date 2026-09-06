@@ -65,7 +65,7 @@ about_ui <- function(id) {
           class = "condition-key"
         ),
         htmltools::p(
-          "The study examines Müller glia in the adult mouse retina after p27 inactivation (p27CKO), with and without electrical stimulation (E-Stim). The final explorer contains 3,456 cells across eight clusters and six biological samples."
+          "The study examines Müller glia in the adult mouse retina after p27 inactivation (p27CKO), with and without electrical stimulation (E-Stim). The final explorer contains 3,238 cells across five clusters and six biological samples. Clustering uses PFlog normalization, no cell-cycle filtering, 20 principal components, and resolution 0.3."
         ),
         htmltools::p(
           paste(

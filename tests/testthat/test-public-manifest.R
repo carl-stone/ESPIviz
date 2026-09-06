@@ -14,12 +14,12 @@ test_that("public data manifest pins one immutable release asset", {
 
   expect_identical(names(manifest), expected_fields)
   expect_identical(manifest$schema_version, "1.1.0")
-  expect_identical(manifest$data_version, "1.2.0")
+  expect_identical(manifest$data_version, "1.3.0")
   expect_equal(
     manifest$asset_url,
     paste0(
       "https://github.com/carl-stone/ESPIviz/releases/download/",
-      "data-v1.2.0/espiviz-data-v1.2.0.rds"
+      "data-v1.3.0/espiviz-data-v1.3.0.rds"
     )
   )
   expect_match(manifest$asset_sha256, "^[0-9a-f]{64}$")
@@ -36,7 +36,7 @@ test_that("public data manifest pins one immutable release asset", {
   )
   expect_equal(
     unname(unlist(manifest$dimensions)),
-    c(genes = 38394, cells = 3456, clusters = 8, primary_de_rows = 24601) |>
+    c(genes = 38394, cells = 3238, clusters = 5, primary_de_rows = 17043) |>
       unname()
   )
   expect_length(manifest$input_sha256, 7L)
@@ -47,7 +47,7 @@ test_that("public data manifest pins one immutable release asset", {
 })
 
 test_that("local release asset matches the public manifest when present", {
-  bundle_path <- file.path(repo_root, "release", "espiviz-data-v1.2.0.rds")
+  bundle_path <- file.path(repo_root, "release", "espiviz-data-v1.3.0.rds")
   testthat::skip_if_not(
     file.exists(bundle_path),
     "Local release asset is not committed"
@@ -62,8 +62,8 @@ test_that("local release asset matches the public manifest when present", {
 
   bundle <- readRDS(bundle_path)
   expect_silent(validate_bundle(bundle))
-  expect_identical(nrow(bundle$primary_de), 24601L)
-  expect_identical(nrow(bundle$pathways), 11089L)
+  expect_identical(nrow(bundle$primary_de), 17043L)
+  expect_identical(nrow(bundle$pathways), 10991L)
   expect_true(any(bundle$pathways$p_adjust >= 0.05))
   marker_counts <- table(bundle$markers$cluster)
   expect_true(all(marker_counts <= 25L))

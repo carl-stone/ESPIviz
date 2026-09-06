@@ -37,9 +37,13 @@ cells; double-negative cells remain neutral and double-positive cells mix the
 two feature colors. Violin and gene-pair scatter plots retain the centered PFlog
 scale and report raw-count detection separately.
 
-The pinned v1.0.0 data asset remains byte-for-byte immutable. Bundle schema
-v1.1.0 adds the exact normalization values returned by the pinned `scclrR`
-revision.
+Data v1.3.0 contains 3,238 cells and 38,394 genes, using the saved PFlog
+clustering without cell-cycle filtering, 20 principal components, and
+resolution 0.3 (seed 2847). Original cluster IDs 1–5 and the corresponding
+20-PC UMAP are preserved. It includes the matching Wilcoxon markers, 17,043
+primary condition-model DE rows, and 10,991 GO Biological Process enrichment
+results. Earlier data assets remain immutable. Bundle schema v1.1.0 stores
+the exact normalization values returned by the pinned `scclrR` revision.
 
 ## Repository contents
 
@@ -62,7 +66,7 @@ just data-dry-run
 just data-build
 just app-run
 just test
-just manifest
+cd app && just manifest
 ```
 
 The standalone exporter and PFlog equivalence test additionally require Rust
@@ -78,7 +82,7 @@ before building data. `just data-dry-run` validates those inputs without writing
 a bundle. To run against a local bundle:
 
 ```sh
-just app-run /absolute/path/to/espiviz-data-v1.2.0.rds
+just app-run /absolute/path/to/espiviz-data-v1.3.0.rds
 ```
 
 `just manifest` scans `app/` only, keeping Seurat, `scclrR`, and other exporter

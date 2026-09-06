@@ -1,7 +1,7 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 source_manifest := "config/source-manifest.local.json"
-data_output := "dist/espiviz-data-v1.2.0.rds"
+data_output := "dist/espiviz-data-v1.3.0.rds"
 
 default:
     @just --list
@@ -32,5 +32,6 @@ test:
     Rscript -e 'testthat::test_dir("tests/testthat", reporter = "summary", stop_on_failure = TRUE)'
 
 # Generate deployment metadata by scanning the deployable app directory only.
+[working-directory: 'app']
 manifest:
-    Rscript -e 'if (!requireNamespace("rsconnect", quietly = TRUE)) stop("Install rsconnect first"); rsconnect::writeManifest(appDir = "app", appPrimaryDoc = "app.R")'
+    Rscript -e 'if (!requireNamespace("rsconnect", quietly = TRUE)) stop("Install rsconnect first"); rsconnect::writeManifest(appDir = ".", appPrimaryDoc = "app.R")'

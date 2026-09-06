@@ -60,7 +60,7 @@ synthetic_bundle <- function(extra_genes = 0L) {
     mean_count_control = c(55, 18, 120, 490),
     mean_count_estim = c(130, 22, 42, 510),
     contrast = rep("estim_vs_control", 4),
-    design = rep("primary_unpaired_condition", 4),
+    design = rep("unpaired_condition", 4),
     stringsAsFactors = FALSE
   )
 
@@ -100,11 +100,11 @@ synthetic_bundle <- function(extra_genes = 0L) {
 
   list(
     schema_version = "1.1.0",
-    data_version = "1.2.0",
+    data_version = "1.3.0",
     provenance = list(
       source_sha256 = paste(rep("a", 64), collapse = ""),
       reduction = "umap_pflog_mg_selected_no_filter_cc_dims20",
-      cluster_column = "cluster_pflog_mg_selected_no_filter_cc_dims20_res0.5",
+      cluster_column = "cluster_pflog_mg_selected_no_filter_cc_dims20_res0.3",
       inputs = list(
         source_object = list(sha256 = paste(rep("a", 64), collapse = "")),
         primary_de = list(sha256 = paste(rep("b", 64), collapse = ""))

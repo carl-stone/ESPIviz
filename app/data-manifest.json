@@ -1,23 +1,23 @@
 {
   "schema_version": "1.1.0",
-  "data_version": "1.2.0",
-  "asset_url": "https://github.com/carl-stone/ESPIviz/releases/download/data-v1.2.0/espiviz-data-v1.2.0.rds",
-  "asset_sha256": "c2bd7213e3a5770364d1508a174e257f82f74470cf4667402e05f2805020269b",
-  "asset_bytes": 39023364,
-  "source_sha256": "ed320802451f9f426b1ca1e72b5f8bcd6bbd6f1095693fec17253903e62edc67",
+  "data_version": "1.3.0",
+  "asset_url": "https://github.com/carl-stone/ESPIviz/releases/download/data-v1.3.0/espiviz-data-v1.3.0.rds",
+  "asset_sha256": "2a3997660b4cba9a30fe7915ab1110b6b7c61445eaa1dfce6d22a85924b61e34",
+  "asset_bytes": 36316020,
+  "source_sha256": "d67cc44b9e59a5a5c2e22a61dded7fc0a4386b42f0ea7b66898884bf62748741",
   "dimensions": {
     "genes": 38394,
-    "cells": 3456,
-    "clusters": 8,
-    "primary_de_rows": 24601
+    "cells": 3238,
+    "clusters": 5,
+    "primary_de_rows": 17043
   },
   "input_sha256": {
-    "source_object": "ed320802451f9f426b1ca1e72b5f8bcd6bbd6f1095693fec17253903e62edc67",
-    "primary_de": "36d89d84f9539ca1547f997615a0fdf2e8a07e8ff982796af406d4c1000f80c5",
-    "markers": "87073fa5b3b06440a3fdf1b962a35ab784681274dc8dd42940e17490c641b86a",
-    "ora_up": "ac0a197027d51546ae31ea117944cb29ef2191523d0fd77df9eacee7e8f25545",
-    "ora_down": "5785bbe3812d1db19e0bab239fed1dc5e6ac55890e88f23592aeca86b16db4cb",
-    "gsea": "8fa04cb1c7a48041da2edc39c128fbbf65a82e40c25adb67f3b39a536f7e7313",
+    "source_object": "d67cc44b9e59a5a5c2e22a61dded7fc0a4386b42f0ea7b66898884bf62748741",
+    "primary_de": "ef6628e61634c06d57b3d3a01b3ac649b59c13a87691098053d7e51eebb8e560",
+    "markers": "8a88414361c564c749db9b614332f85b5a8eb0e5fb225407482e1cc9134af935",
+    "ora_up": "c2f6eb74f9420011aa80eeb8d4d05f2872961b58b82dd2b3880bd2edbbb634d7",
+    "ora_down": "b292a1e08b795689da980b63455f8f0865bab0e0cd1cd0541e0fc1b6819c5071",
+    "gsea": "8c95a6c1ab346d11a859e820ed30df6fd106c609f751f33a2f5ee8ffd65ba225",
     "featured_genes_config": "eff12023c2ca496153bc170a240da3d89da50da0478d9079084f62bca2b0b549"
   }
 }

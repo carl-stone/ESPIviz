@@ -1,14 +1,14 @@
 {
   "manifest_version": "1.0.0",
   "source_object": {
-    "path": "/absolute/path/to/frozen-source-object.rds",
-    "sha256": "ed320802451f9f426b1ca1e72b5f8bcd6bbd6f1095693fec17253903e62edc67"
+    "path": "/absolute/path/to/cluster_pflog_mg_selected_no_filter_cc_elbow20.rds",
+    "sha256": "d67cc44b9e59a5a5c2e22a61dded7fc0a4386b42f0ea7b66898884bf62748741"
   },
   "primary_de": {
     "path": "/absolute/path/to/primary-condition-de.tsv"
   },
   "markers": {
-    "path": "/absolute/path/to/final-cluster-markers.csv"
+    "path": "/absolute/path/to/find_all_markers_wilcox_data_pflog_mg_selected_no_filter_cc_dims20_res0.3.csv"
   },
   "ora_up": {
     "path": "/absolute/path/to/ora-up.tsv"
