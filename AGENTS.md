@@ -31,3 +31,26 @@ it must read every source path from the local source manifest.
 
 Run `just test` after code changes. Run `just manifest` only from `app/`; do not
 let exporter-only packages enter the deployment manifest.
+
+## UI design synchronization
+
+The current ESPIviz UI is registered in `carl-stone/carl-ui` as the
+`espiviz-current` imported-reference profile. When Carl asks to update ESPIviz to
+match its Figma design, use the Carl UI registry to resolve the current Figma file,
+page, and representative screen node before changing presentation code.
+
+For a Figma-driven UI sync:
+
+- Treat Figma as authoritative for the requested visual state and this repository as
+  authoritative for Shiny behavior, data flow, and accessibility requirements.
+- Implement the design through `bslib`, Shiny UI primitives, and `app/www/styles.css`
+  rather than generating an unrelated frontend stack.
+- Preserve reactive behavior unless the requested design explicitly changes the
+  interaction structure.
+- Prefer reusable CSS/theme changes over one-off inline styling.
+- Render and compare the app against the target Figma screen before considering a
+  visual sync complete.
+
+Do not use another Carl UI profile implicitly. `espiviz-current` remains an
+imported reference until Carl deliberately promotes or forks it into an approved
+reusable design.
