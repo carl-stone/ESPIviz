@@ -54,3 +54,5 @@ For a Figma-driven UI sync:
 Do not use another Carl UI profile implicitly. `espiviz-current` remains an
 imported reference until Carl deliberately promotes or forks it into an approved
 reusable design.
+
+When an intentional UI change affects a registered screen, update the corresponding editable Figma capture and then record this repository's full Git commit in both Carl UI copies of `figma.sourceCapture.sourceRevision`. Run `python scripts/validate_registry.py` in `carl-ui`. Never advance the revision unless the capture was updated and visually verified; if Figma access is unavailable, report the design sync as outstanding.
